@@ -9,7 +9,6 @@ const TABS = [
   { href: "/content", label: "Content", icon: IconContent },
   { href: "/clients", label: "Clients", icon: IconClients },
   { href: "/fitness", label: "Fitness", icon: IconFitness },
-  { href: "/ops", label: "Ops", icon: IconOps },
 ] as const;
 
 export default function BottomNav() {
@@ -17,7 +16,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md border-t border-line bg-surface/95 backdrop-blur">
-      <ul className="grid grid-cols-6">
+      <ul className="grid grid-cols-5">
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
@@ -99,20 +98,6 @@ function IconFitness({ className }: IconProps) {
       <rect x="16.4" y="9" width="2.6" height="6" rx="0.9" fill="currentColor" />
       <rect x="1.5" y="10.2" width="1.8" height="3.6" rx="0.7" fill="currentColor" opacity="0.6" />
       <rect x="20.7" y="10.2" width="1.8" height="3.6" rx="0.7" fill="currentColor" opacity="0.6" />
-    </svg>
-  );
-}
-
-function IconOps({ className }: IconProps) {
-  return (
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" className={className}>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
-      <path
-        d="M12 3.5V6M12 18V20.5M20.5 12H18M6 12H3.5M17.7 6.3L16 8M8 16L6.3 17.7M17.7 17.7L16 16M8 8L6.3 6.3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }

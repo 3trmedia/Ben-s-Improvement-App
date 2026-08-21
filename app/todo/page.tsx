@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { PageHeader, Section, Card, Pill, Segmented, Checkbox, useToggleSet } from "@/components/ui";
-import { todos, habits, goals, type Entity } from "@/lib/mock-data";
+import { todos, habits, goals, projects, type Entity } from "@/lib/mock-data";
+
+const STATUS_TONE: Record<string, "accent" | "warm" | "neutral"> = {
+  Live: "accent",
+  "In progress": "warm",
+  Planned: "neutral",
+};
 
 const ENTITY_CARD_TONE: Record<Entity, "accent" | "warm" | "none"> = {
   "3TR": "accent",
@@ -89,16 +95,36 @@ export default function TodoPage() {
       )}
 
       {tab === "goals" && (
-        <Section title="This quarter">
-          <div className="flex flex-col gap-2.5">
-            {goals.map((g) => (
-              <Card key={g.id} accent="warm">
-                <p className="text-[14.5px] font-medium">{g.title}</p>
-                <p className="mt-1 text-[12.5px] text-ink-soft">{g.note}</p>
-              </Card>
-            ))}
-          </div>
-        </Section>
+        <>
+          <Section title="This quarter">
+            <div className="flex flex-col gap-2.5">
+              {goals.map((g) => (
+                <Card key={g.id} accent="warm">
+                  <p className="text-[14.5px] font-medium">{g.title}</p>
+                  <p className="mt-1 text-[12.5px] text-ink-soft">{g.note}</p>
+                </Card>
+              ))}
+            </div>
+          </Section>
+          <Section title="Projects">
+            <div className="flex flex-col gap-2.5">
+              {projects.map((p) => (
+                <Card key={p.id} accent="none">
+                  <p className="text-[14.5px] font-medium">{p.title}</p>
+                  <p className="mt-1 text-[12.5px] text-ink-soft">{p.note}</p>
+                  <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
+                    {p.phases.map((phase) => (
+                      <div key={phase.id} className="flex items-center justify-between">
+                        <span className="text-[13.5px]">{phase.name}</span>
+                        <Pill tone={STATUS_TONE[phase.status]}>{phase.status}</Pill>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </Section>
+        </>
       )}
     </>
   );

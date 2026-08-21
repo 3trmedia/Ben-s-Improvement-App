@@ -59,14 +59,24 @@ export const goals = [
     note: "Blind spot: chasing leads reactively instead of a real pipeline cadence.",
   },
   {
-    id: "g2",
-    title: "Ship Blackout's 6-format system consistently",
-    note: "Blind spot: don't build more infrastructure before this is running on its own.",
-  },
-  {
     id: "g3",
     title: "Hit gym 3–4x/week without a guilt spiral on off weeks",
     note: "Systems over motivation.",
+  },
+];
+
+// Auto-Mate lives here as a project under To-Do, not its own tab.
+export const projects = [
+  {
+    id: "proj1",
+    title: "Auto-Mate build",
+    note: "Ship Blackout's 6-format system consistently before adding more automation on top of it.",
+    phases: [
+      { id: "a1", name: "Lead qualifier", status: "Live" },
+      { id: "a2", name: "Calendar automation", status: "In progress" },
+      { id: "a3", name: "Nurture sequences", status: "Planned" },
+      { id: "a4", name: "Invoicing", status: "Planned" },
+    ],
   },
 ];
 
@@ -78,36 +88,49 @@ export const ideaBank = [
 
 export const productionPipeline = {
   Personal: [
-    { id: "p1", title: "Agency pricing myths", stage: "Editing", editor: "Christian", format: "Talking head" },
-    { id: "p2", title: "Morning routine breakdown", stage: "Filmed", editor: "—", format: "Vlog cut" },
+    { id: "p1", title: "Agency pricing myths", stage: "Editing", editor: "Christian", format: "Talking head", due: "Aug 25" },
+    { id: "p2", title: "Morning routine breakdown", stage: "Filmed", editor: "—", format: "Vlog cut", due: "Aug 28" },
   ],
   Blackout: [
-    { id: "p3", title: "Format #3 — feed teardown", stage: "Scripted", editor: "—", format: "Format 3" },
-    { id: "p4", title: "Format #1 — hook study", stage: "Posted", editor: "Upwork", format: "Format 1" },
+    { id: "p3", title: "Format #3 — feed teardown", stage: "Scripted", editor: "—", format: "Format 3", due: "Today" },
+    { id: "p4", title: "Format #1 — hook study", stage: "Posted", editor: "Upwork", format: "Format 1", due: "—" },
   ],
   Clients: {
     "Peak Defense": [
-      { id: "p5", title: "Shopify launch teaser", stage: "Delivered", editor: "Christian", format: "Ad cut" },
+      { id: "p5", title: "Shopify launch teaser", stage: "Delivered", editor: "Christian", format: "Ad cut", due: "—" },
     ],
     "J&C": [
-      { id: "p6", title: "Product spotlight reel", stage: "Idea", editor: "—", format: "Reel" },
+      { id: "p6", title: "Product spotlight reel", stage: "Idea", editor: "—", format: "Reel", due: "Aug 26" },
     ],
     "RNR": [
-      { id: "p7", title: "Testimonial cut #2", stage: "Editor assigned", editor: "Christian", format: "Testimonial" },
+      { id: "p7", title: "Testimonial cut #2", stage: "Editor assigned", editor: "Christian", format: "Testimonial", due: "Today" },
     ],
     "Uptown Drapes": [
-      { id: "p8", title: "Before/after showcase", stage: "Filmed", editor: "—", format: "Showcase" },
+      { id: "p8", title: "Before/after showcase", stage: "Filmed", editor: "—", format: "Showcase", due: "Aug 27" },
     ],
     "Hoffman Tactical": [
-      { id: "p9", title: "Range day recap", stage: "Posted", editor: "Upwork", format: "Recap" },
+      { id: "p9", title: "Range day recap", stage: "Posted", editor: "Upwork", format: "Recap", due: "—" },
     ],
-  } as Record<string, { id: string; title: string; stage: string; editor: string; format: string }[]>,
+  } as Record<string, { id: string; title: string; stage: string; editor: string; format: string; due: string }[]>,
 };
+
+export const brandMetrics = [
+  { id: "m1", channel: "DP Ben B", followers: 8400, change: "+120 this week" },
+  { id: "m2", channel: "Blackout IG", followers: 3100, change: "+64 this week" },
+  { id: "m3", channel: "3TR IG", followers: 1950, change: "+18 this week" },
+];
+
+export const gear = [
+  { id: "g1", item: "Sony A7IV", location: "Studio", checkedOut: false },
+  { id: "g2", item: "Rode Wireless GO II", location: "With Christian", checkedOut: true },
+  { id: "g3", item: "50mm Prime", location: "Studio", checkedOut: false },
+  { id: "g4", item: "Softbox kit", location: "Uptown Drapes shoot", checkedOut: true },
+];
 
 export const clients = [
   { id: "c1", name: "Peak Defense", type: "Shopify template work", status: "Active", contract: "Flat fee", nextTouch: "Aug 22", payment: "Paid" },
   { id: "c2", name: "J&C", type: "Content retainer", status: "Active", contract: "Revenue share", nextTouch: "Aug 24", payment: "Outstanding" },
-  { id: "c3", name: "RNR", type: "Video production", status: "Active", contract: "Flat fee", nextTouch: "Aug 21", payment: "Paid" },
+  { id: "c3", name: "RNR", type: "Video production", status: "Active", contract: "Flat fee", nextTouch: "Today", payment: "Paid" },
   { id: "c4", name: "Uptown Drapes", type: "Content retainer", status: "Active", contract: "Revenue share", nextTouch: "Aug 27", payment: "Paid" },
   { id: "c5", name: "Hoffman Tactical", type: "Brand refresh", status: "Delivered", contract: "Flat fee", nextTouch: "Sep 3", payment: "Invoiced" },
 ];
@@ -133,54 +156,47 @@ export const revenueByClient = [
   { id: "r5", name: "Hoffman Tactical", amount: 900 },
 ];
 
+// Planned exercises per day — the target the log below is checked against.
 export const workoutDays = [
   {
     id: "w1",
     name: "Push Day",
     exercises: [
-      { id: "e1", name: "Bench Press", sets: 4, reps: "6–8", weight: "185 lb" },
-      { id: "e2", name: "Overhead Press", sets: 3, reps: "8–10", weight: "95 lb" },
-      { id: "e3", name: "Incline DB Press", sets: 3, reps: "10–12", weight: "60 lb" },
-      { id: "e4", name: "Lateral Raise", sets: 3, reps: "12–15", weight: "20 lb" },
+      { id: "e1", name: "Bench Press", targetSets: 4, targetReps: "6–8", targetWeight: "185 lb" },
+      { id: "e2", name: "Overhead Press", targetSets: 3, targetReps: "8–10", targetWeight: "95 lb" },
+      { id: "e3", name: "Incline DB Press", targetSets: 3, targetReps: "10–12", targetWeight: "60 lb" },
+      { id: "e4", name: "Lateral Raise", targetSets: 3, targetReps: "12–15", targetWeight: "20 lb" },
     ],
   },
   {
     id: "w2",
     name: "Pull Day",
     exercises: [
-      { id: "e5", name: "Deadlift", sets: 4, reps: "5", weight: "275 lb" },
-      { id: "e6", name: "Pull-Up", sets: 4, reps: "8–10", weight: "BW" },
-      { id: "e7", name: "Barbell Row", sets: 3, reps: "8–10", weight: "155 lb" },
-      { id: "e8", name: "Face Pull", sets: 3, reps: "15", weight: "40 lb" },
+      { id: "e5", name: "Deadlift", targetSets: 4, targetReps: "5", targetWeight: "275 lb" },
+      { id: "e6", name: "Pull-Up", targetSets: 4, targetReps: "8–10", targetWeight: "BW" },
+      { id: "e7", name: "Barbell Row", targetSets: 3, targetReps: "8–10", targetWeight: "155 lb" },
+      { id: "e8", name: "Face Pull", targetSets: 3, targetReps: "15", targetWeight: "40 lb" },
     ],
   },
   {
     id: "w3",
     name: "Leg Day",
     exercises: [
-      { id: "e9", name: "Back Squat", sets: 4, reps: "6–8", weight: "225 lb" },
-      { id: "e10", name: "Romanian Deadlift", sets: 3, reps: "8–10", weight: "185 lb" },
-      { id: "e11", name: "Walking Lunge", sets: 3, reps: "12/leg", weight: "40 lb" },
+      { id: "e9", name: "Back Squat", targetSets: 4, targetReps: "6–8", targetWeight: "225 lb" },
+      { id: "e10", name: "Romanian Deadlift", targetSets: 3, targetReps: "8–10", targetWeight: "185 lb" },
+      { id: "e11", name: "Walking Lunge", targetSets: 3, targetReps: "12/leg", targetWeight: "40 lb" },
     ],
   },
 ];
 
-export const automationRoadmap = [
-  { id: "a1", name: "Lead qualifier", status: "Live" },
-  { id: "a2", name: "Calendar automation", status: "In progress" },
-  { id: "a3", name: "Nurture sequences", status: "Planned" },
-  { id: "a4", name: "Invoicing", status: "Planned" },
-];
+// Most recent logged session per exercise — what was actually done last time.
+export const lastLogged: Record<string, { date: string; actualSets: number; actualReps: string; actualWeight: string }> = {
+  e1: { date: "Aug 18", actualSets: 4, actualReps: "6,6,5,5", actualWeight: "185 lb" },
+  e2: { date: "Aug 18", actualSets: 3, actualReps: "9,8,8", actualWeight: "95 lb" },
+  e5: { date: "Aug 16", actualSets: 4, actualReps: "5,5,5,4", actualWeight: "275 lb" },
+};
 
-export const gear = [
-  { id: "g1", item: "Sony A7IV", location: "Studio", checkedOut: false },
-  { id: "g2", item: "Rode Wireless GO II", location: "With Christian", checkedOut: true },
-  { id: "g3", item: "50mm Prime", location: "Studio", checkedOut: false },
-  { id: "g4", item: "Softbox kit", location: "Uptown Drapes shoot", checkedOut: true },
-];
-
-export const brandMetrics = [
-  { id: "m1", channel: "DP Ben B", followers: 8400, change: "+120 this week" },
-  { id: "m2", channel: "Blackout IG", followers: 3100, change: "+64 this week" },
-  { id: "m3", channel: "3TR IG", followers: 1950, change: "+18 this week" },
+export const bodyLog = [
+  { id: "bl1", date: "Aug 19", weight: "182.4 lb", note: "Ring recovery: 78" },
+  { id: "bl2", date: "Aug 12", weight: "183.1 lb", note: "Ring recovery: 71" },
 ];

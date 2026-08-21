@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PageHeader, Section, Card, Pill, Segmented } from "@/components/ui";
-import { productionPipeline, ideaBank } from "@/lib/mock-data";
+import { productionPipeline, ideaBank, brandMetrics, gear } from "@/lib/mock-data";
 
 const STAGE_TONE: Record<string, "accent" | "warm" | "neutral" | "danger"> = {
   Idea: "neutral",
@@ -81,6 +81,36 @@ export default function ContentPage() {
                 <Pill tone="warm">{idea.tier}</Pill>
                 <Pill tone="neutral">{idea.channel}</Pill>
               </div>
+            </Card>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Brand metrics">
+        <div className="flex flex-col gap-2.5">
+          {brandMetrics.map((m) => (
+            <Card key={m.id} accent="none" className="flex items-center justify-between">
+              <div>
+                <p className="text-[14px] font-medium">{m.channel}</p>
+                <p className="text-[12px] text-ink-soft">{m.change}</p>
+              </div>
+              <p className="font-mono text-[15px] tabular-nums">{m.followers.toLocaleString()}</p>
+            </Card>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Gear">
+        <div className="flex flex-col gap-2.5">
+          {gear.map((g) => (
+            <Card key={g.id} accent="none" className="flex items-center justify-between">
+              <div>
+                <p className="text-[14px] font-medium">{g.item}</p>
+                <p className="text-[12px] text-ink-soft">{g.location}</p>
+              </div>
+              <Pill tone={g.checkedOut ? "warm" : "accent"}>
+                {g.checkedOut ? "Checked out" : "In studio"}
+              </Pill>
             </Card>
           ))}
         </div>
