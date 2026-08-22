@@ -183,6 +183,56 @@ export function ProgressBar({
   );
 }
 
+export function Ring({
+  value,
+  target,
+  label,
+  unit,
+  tone,
+}: {
+  value: number;
+  target: number;
+  label: string;
+  unit: string;
+  tone: "accent" | "danger" | "info";
+}) {
+  const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
+  const r = 38;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - pct / 100);
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative h-24 w-24">
+        <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+          <circle cx="48" cy="48" r={r} stroke="var(--line)" strokeWidth="8" fill="none" />
+          <circle
+            cx="48"
+            cy="48"
+            r={r}
+            stroke={`var(--${tone})`}
+            strokeWidth="8"
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-[stroke-dashoffset]"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="font-mono text-[15px] font-semibold tabular-nums">{pct}%</span>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="text-[12.5px] font-medium">{label}</p>
+        <p className="font-mono text-[11px] tabular-nums text-ink-soft">
+          {value}/{target}
+          {unit}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function useToggleSet(initial: string[] = []) {
   const [set, setSet] = useState(new Set(initial));
   const toggle = (id: string) =>

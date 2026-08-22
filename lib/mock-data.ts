@@ -236,6 +236,32 @@ export const lastLogged: Record<string, { date: string; actualSets: number; actu
   e5: { date: "Aug 16", actualSets: 4, actualReps: "5,5,5,4", actualWeight: "275 lb" },
 };
 
+export type MealEntry = { id: string; name: string; calories: number; protein: number };
+
+export const nutritionTargets = { calories: 2400, protein: 175, waterOz: 100 };
+
+// The recipe library — meant to grow over time as meals get logged and saved.
+export const savedRecipes: MealEntry[] = [
+  { id: "r1", name: "Protein shake", calories: 220, protein: 35 },
+  { id: "r2", name: "Chicken, rice & broccoli bowl", calories: 620, protein: 52 },
+  { id: "r3", name: "Egg white oats", calories: 380, protein: 28 },
+  { id: "r4", name: "Greek yogurt + berries", calories: 180, protein: 20 },
+];
+
+export const todayMeals: (MealEntry & { time: string })[] = [
+  { id: "m1", name: "Egg white oats", calories: 380, protein: 28, time: "7:30 AM" },
+  { id: "m2", name: "Chicken, rice & broccoli bowl", calories: 620, protein: 52, time: "12:30 PM" },
+];
+
+export const todayWaterOz = 48;
+
+export type PeptideEntry = { id: string; compound: string; dose: string; time: string };
+
+export const peptideLog: PeptideEntry[] = [
+  { id: "pep1", compound: "BPC-157", dose: "250mcg", time: "8:00 AM" },
+  { id: "pep2", compound: "CJC-1295", dose: "300mcg", time: "8:00 AM" },
+];
+
 export const bodyLog = [
   { id: "bl1", date: "Aug 19", weight: "182.4 lb", note: "Ring recovery: 78" },
   { id: "bl2", date: "Aug 12", weight: "183.1 lb", note: "Ring recovery: 71" },

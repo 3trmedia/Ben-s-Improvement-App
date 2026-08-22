@@ -7,7 +7,7 @@ const TABS = [
   { href: "/events", label: "Events", icon: IconToday },
   { href: "/todo", label: "To-Do", icon: IconTodo },
   { href: "/content", label: "Content", icon: IconContent },
-  { href: "/clients", label: "Clients", icon: IconClients },
+  { href: "/calories", label: "Calories", icon: IconCalories },
   { href: "/fitness", label: "Fitness", icon: IconFitness },
 ] as const;
 
@@ -79,13 +79,15 @@ function IconContent({ className }: IconProps) {
   );
 }
 
-function IconClients({ className }: IconProps) {
+function IconCalories({ className }: IconProps) {
   return (
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" className={className}>
-      <circle cx="9" cy="8.3" r="2.8" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M3.8 19c0-3 2.3-5.2 5.2-5.2s5.2 2.2 5.2 5.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <circle cx="16.8" cy="8.8" r="2.1" stroke="currentColor" strokeWidth="1.6" opacity="0.6" />
-      <path d="M14.9 19c0-2.4 1.7-4.3 3.9-4.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.6" />
+      <path
+        d="M12 3.5c1.2 2 .3 3.1-.6 4.2-1 1.2-1.9 2.4-1.9 4.1a4.5 4.5 0 0 0 9 0c0-1.6-.7-2.7-1.5-3.6.2 1.2-.2 2-1 2.4.3-2.4-1-4.3-4-7.1Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
