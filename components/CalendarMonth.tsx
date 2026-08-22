@@ -38,6 +38,7 @@ export default function CalendarMonth({
   const [viewYear, setViewYear] = useState(base.getFullYear());
   const [viewMonth, setViewMonth] = useState(base.getMonth());
   const [popupKey, setPopupKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState(todayKey);
 
   const cells = buildMonthGrid(viewYear, viewMonth);
   const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString("en-US", {
@@ -95,18 +96,23 @@ export default function CalendarMonth({
         {cells.map((date, i) => {
           if (!date) return <div key={i} />;
           const key = toKey(date);
-          const isToday = key === todayKey;
+          const isSelected = key === selectedKey;
           const dayEvents = eventsByDay(key);
           const colors = Array.from(new Set(dayEvents.map((e) => e.color))).slice(0, 3);
           return (
             <button
               key={i}
-              onClick={() => setPopupKey(key)}
+              onClick={() => {
+                setSelectedKey(key);
+                setPopupKey(key);
+              }}
               className="flex flex-col items-center gap-1 py-1"
             >
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-[13px] ${
-                  isToday ? "bg-cal-accent font-semibold text-surface" : "text-cal-accent"
+                className={`flex h-7 w-7 items-center justify-center rounded-full border text-[13px] ${
+                  isSelected
+                    ? "border-cal-accent bg-cal-accent font-semibold text-surface"
+                    : "border-cal-accent text-cal-accent"
                 }`}
               >
                 {date.getDate()}
