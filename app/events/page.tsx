@@ -98,9 +98,9 @@ export default function EventsPage() {
                 <span
                   className={`flex h-8 w-8 items-center justify-center rounded-full text-[14px] ${
                     isSelected
-                      ? "bg-accent font-semibold text-surface"
+                      ? "bg-cal-accent font-semibold text-surface"
                       : isToday
-                        ? "border border-accent text-ink"
+                        ? "border border-cal-accent text-ink"
                         : "text-ink"
                   }`}
                 >
