@@ -106,7 +106,7 @@ export default function CalendarMonth({
             >
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-[13px] ${
-                  isToday ? "bg-cal-accent font-semibold text-surface" : "text-ink"
+                  isToday ? "bg-cal-accent font-semibold text-surface" : "text-cal-accent"
                 }`}
               >
                 {date.getDate()}
