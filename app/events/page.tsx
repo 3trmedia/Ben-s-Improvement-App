@@ -98,10 +98,10 @@ export default function EventsPage() {
                   {d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3)}
                 </span>
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-[14px] ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border text-[14px] ${
                     isSelected
                       ? "border-cal-accent bg-cal-accent font-semibold text-surface"
-                      : "border-cal-accent text-cal-accent"
+                      : "border-ink-soft/35 text-ink"
                   }`}
                 >
                   {d.getDate()}

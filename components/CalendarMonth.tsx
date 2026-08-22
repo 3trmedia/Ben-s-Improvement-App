@@ -112,10 +112,10 @@ export default function CalendarMonth({
               className="flex flex-col items-center gap-1 py-1"
             >
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full border text-[13px] ${
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[13px] ${
                   isSelected
                     ? "border-cal-accent bg-cal-accent font-semibold text-surface"
-                    : "border-cal-accent text-cal-accent"
+                    : "border-ink-soft/35 text-ink"
                 }`}
               >
                 {date.getDate()}
