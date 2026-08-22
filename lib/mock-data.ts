@@ -1,5 +1,33 @@
 export type Entity = "3TR" | "Blackout" | "Personal";
 
+export type EventColor = "accent" | "warm" | "danger" | "info";
+
+export type CalEvent = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  start: string;
+  end: string;
+  title: string;
+  location?: string;
+  color: EventColor;
+};
+
+export const events: CalEvent[] = [
+  { id: "ev1", date: "2026-08-17", start: "9:00 AM", end: "9:30 AM", title: "Hoffman Tactical invoice sent", color: "info" },
+  { id: "ev2", date: "2026-08-18", start: "9:00 AM", end: "9:30 AM", title: "Peak Defense kickoff call", location: "Zoom", color: "info" },
+  { id: "ev3", date: "2026-08-19", start: "6:00 PM", end: "7:00 PM", title: "Gym — Push day", color: "accent" },
+  { id: "ev4", date: "2026-08-20", start: "11:00 AM", end: "12:00 PM", title: "RNR testimonial shoot", location: "RNR HQ", color: "danger" },
+  { id: "ev5", date: "2026-08-21", start: "10:00 AM", end: "10:30 AM", title: "Christian — RNR edit check-in", color: "info" },
+  { id: "ev6", date: "2026-08-21", start: "1:00 PM", end: "2:00 PM", title: "Film Blackout format #3", color: "warm" },
+  { id: "ev7", date: "2026-08-21", start: "6:00 PM", end: "7:00 PM", title: "Gym — Leg day", color: "accent" },
+  { id: "ev8", date: "2026-08-22", start: "9:00 AM", end: "9:30 AM", title: "Payment follow-up: J&C", color: "info" },
+  { id: "ev9", date: "2026-08-24", start: "3:00 PM", end: "4:00 PM", title: "J&C retainer check-in", location: "Call", color: "info" },
+  { id: "ev10", date: "2026-08-26", start: "10:00 AM", end: "11:00 AM", title: "Discovery call — Darren / Alpine", color: "warm" },
+  { id: "ev11", date: "2026-08-27", start: "1:00 PM", end: "2:00 PM", title: "Uptown Drapes showcase filming", location: "On-site", color: "danger" },
+  { id: "ev12", date: "2026-08-28", start: "9:00 AM", end: "9:30 AM", title: "Weekly review", color: "accent" },
+  { id: "ev13", date: "2026-08-31", start: "5:00 PM", end: "6:00 PM", title: "Hike / run club", color: "accent" },
+];
+
 export const todos = [
   {
     id: "t1",

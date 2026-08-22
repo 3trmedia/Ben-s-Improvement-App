@@ -12,6 +12,8 @@
   --warm-soft: #2e2018;
   --danger: #ef5350;
   --danger-soft: #2e1a1a;
+  --info: #5aa9e6;
+  --info-soft: #182530;
 }
 
 @theme inline {
@@ -26,6 +28,8 @@
   --color-warm-soft: var(--warm-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
   --font-display: var(--font-fraunces);
   --font-sans: var(--font-public-sans);
   --font-mono: var(--font-plex-mono);
