@@ -43,25 +43,37 @@ export const todos = [
   },
 ];
 
+// doneThisWeek / targetPerWeek is what drives each habit's progress bar —
+// consistency, not a streak-guilt counter that resets to zero on a miss.
 export const habits = [
-  { id: "h1", label: "Gym session", cadence: "3–4x / week" },
-  { id: "h2", label: "Hike or run club", cadence: "weekly" },
-  { id: "h3", label: "Dance night", cadence: "weekly" },
-  { id: "h4", label: "Protein target (150–185g)", cadence: "daily" },
-  { id: "h5", label: "Meal prep rotation used", cadence: "weekly" },
-  { id: "h6", label: "Peptide log", cadence: "daily" },
+  { id: "h1", label: "Gym session", cadence: "3–4x / week", targetPerWeek: 4, doneThisWeek: 3 },
+  { id: "h2", label: "Hike or run club", cadence: "weekly", targetPerWeek: 1, doneThisWeek: 1 },
+  { id: "h3", label: "Dance night", cadence: "weekly", targetPerWeek: 1, doneThisWeek: 0 },
+  { id: "h4", label: "Protein target (150–185g)", cadence: "daily", targetPerWeek: 7, doneThisWeek: 5 },
+  { id: "h5", label: "Meal prep rotation used", cadence: "weekly", targetPerWeek: 1, doneThisWeek: 1 },
+  { id: "h6", label: "Peptide log", cadence: "daily", targetPerWeek: 7, doneThisWeek: 6 },
 ];
 
+// Every goal carries a real metric behind its bar — a count, a weekly
+// consistency rate, or a PR you're chasing — not a manual "how do I feel" slider.
 export const goals = [
   {
     id: "g1",
     title: "Close 2 more revenue-share clients",
     note: "Blind spot: chasing leads reactively instead of a real pipeline cadence.",
+    metric: { kind: "count" as const, current: 0, target: 2, unit: "clients" },
   },
   {
     id: "g3",
     title: "Hit gym 3–4x/week without a guilt spiral on off weeks",
-    note: "Systems over motivation.",
+    note: "Systems over motivation — pulled straight from the Habits tab, not tracked twice.",
+    metric: { kind: "habit" as const, habitId: "h1" },
+  },
+  {
+    id: "g4",
+    title: "Bench 205 lb by end of quarter",
+    note: "Last logged: 185 lb on Aug 18. Pulled from the Fitness log, not re-entered here.",
+    metric: { kind: "pr" as const, current: 185, target: 205, unit: "lb" },
   },
 ];
 

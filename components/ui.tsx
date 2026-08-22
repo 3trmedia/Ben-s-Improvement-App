@@ -154,6 +154,35 @@ export function Checkbox({
   );
 }
 
+export function ProgressBar({
+  current,
+  target,
+  label,
+  tone = "accent",
+}: {
+  current: number;
+  target: number;
+  label: string;
+  tone?: "accent" | "warm";
+}) {
+  const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+  const barTone = tone === "accent" ? "bg-accent" : "bg-warm";
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between text-[12.5px]">
+        <span className="text-ink-soft">{label}</span>
+        <span className="font-mono tabular-nums text-ink-soft">{pct}%</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
+        <div
+          className={`h-full rounded-full ${barTone} transition-[width]`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function useToggleSet(initial: string[] = []) {
   const [set, setSet] = useState(new Set(initial));
   const toggle = (id: string) =>

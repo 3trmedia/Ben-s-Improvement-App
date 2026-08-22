@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, Section, Card, Pill, Segmented, Checkbox, useToggleSet } from "@/components/ui";
+import { PageHeader, Section, Card, Pill, Segmented, Checkbox, ProgressBar, useToggleSet } from "@/components/ui";
 import { todos, habits, goals, projects, type Entity } from "@/lib/mock-data";
 
 const STATUS_TONE: Record<string, "accent" | "warm" | "neutral"> = {
@@ -26,6 +26,19 @@ export default function TodoPage() {
   const [tab, setTab] = useState<"todo" | "habits" | "goals">("todo");
   const { set: doneTasks, toggle: toggleTask } = useToggleSet();
   const { set: doneHabits, toggle: toggleHabit } = useToggleSet(["h1", "h4"]);
+  const [weekProgress, setWeekProgress] = useState<Record<string, number>>(
+    Object.fromEntries(habits.map((h) => [h.id, h.doneThisWeek]))
+  );
+
+  const toggleHabitToday = (habitId: string) => {
+    const wasChecked = doneHabits.has(habitId);
+    toggleHabit(habitId);
+    const habit = habits.find((h) => h.id === habitId)!;
+    setWeekProgress((prev) => ({
+      ...prev,
+      [habitId]: Math.max(0, Math.min(habit.targetPerWeek, prev[habitId] + (wasChecked ? -1 : 1))),
+    }));
+  };
 
   const groups = ["Today", "This week"] as const;
 
@@ -82,12 +95,21 @@ export default function TodoPage() {
         <Section title="Check-off, not streak-guilt">
           <div className="flex flex-col gap-2.5">
             {habits.map((h) => (
-              <Card key={h.id} accent="none" className="flex items-center justify-between">
-                <div>
-                  <p className="text-[14px] font-medium">{h.label}</p>
-                  <p className="text-[12px] text-ink-soft">{h.cadence}</p>
+              <Card key={h.id} accent="none">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[14px] font-medium">{h.label}</p>
+                    <p className="text-[12px] text-ink-soft">{h.cadence}</p>
+                  </div>
+                  <Checkbox checked={doneHabits.has(h.id)} onChange={() => toggleHabitToday(h.id)} />
                 </div>
-                <Checkbox checked={doneHabits.has(h.id)} onChange={() => toggleHabit(h.id)} />
+                <div className="mt-3 border-t border-line pt-3">
+                  <ProgressBar
+                    current={weekProgress[h.id]}
+                    target={h.targetPerWeek}
+                    label={`${weekProgress[h.id]}/${h.targetPerWeek} this week`}
+                  />
+                </div>
               </Card>
             ))}
           </div>
@@ -98,30 +120,63 @@ export default function TodoPage() {
         <>
           <Section title="This quarter">
             <div className="flex flex-col gap-2.5">
-              {goals.map((g) => (
-                <Card key={g.id} accent="warm">
-                  <p className="text-[14.5px] font-medium">{g.title}</p>
-                  <p className="mt-1 text-[12.5px] text-ink-soft">{g.note}</p>
-                </Card>
-              ))}
+              {goals.map((g) => {
+                const m = g.metric;
+                let current = 0;
+                let target = 1;
+                let label = "";
+                if (m.kind === "count") {
+                  current = m.current;
+                  target = m.target;
+                  label = `${m.current}/${m.target} ${m.unit}`;
+                } else if (m.kind === "pr") {
+                  current = m.current;
+                  target = m.target;
+                  label = `${m.current}/${m.target} ${m.unit}`;
+                } else {
+                  const habit = habits.find((h) => h.id === m.habitId)!;
+                  current = weekProgress[habit.id];
+                  target = habit.targetPerWeek;
+                  label = `${current}/${target} this week`;
+                }
+                return (
+                  <Card key={g.id} accent="warm">
+                    <p className="text-[14.5px] font-medium">{g.title}</p>
+                    <p className="mt-1 text-[12.5px] text-ink-soft">{g.note}</p>
+                    <div className="mt-3 border-t border-line pt-3">
+                      <ProgressBar current={current} target={target} label={label} tone="warm" />
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           </Section>
           <Section title="Projects">
             <div className="flex flex-col gap-2.5">
-              {projects.map((p) => (
-                <Card key={p.id} accent="none">
-                  <p className="text-[14.5px] font-medium">{p.title}</p>
-                  <p className="mt-1 text-[12.5px] text-ink-soft">{p.note}</p>
-                  <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
-                    {p.phases.map((phase) => (
-                      <div key={phase.id} className="flex items-center justify-between">
-                        <span className="text-[13.5px]">{phase.name}</span>
-                        <Pill tone={STATUS_TONE[phase.status]}>{phase.status}</Pill>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              ))}
+              {projects.map((p) => {
+                const done = p.phases.filter((ph) => ph.status === "Live").length;
+                return (
+                  <Card key={p.id} accent="none">
+                    <p className="text-[14.5px] font-medium">{p.title}</p>
+                    <p className="mt-1 text-[12.5px] text-ink-soft">{p.note}</p>
+                    <div className="mt-3 border-t border-line pt-3">
+                      <ProgressBar
+                        current={done}
+                        target={p.phases.length}
+                        label={`${done}/${p.phases.length} phases live`}
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
+                      {p.phases.map((phase) => (
+                        <div key={phase.id} className="flex items-center justify-between">
+                          <span className="text-[13.5px]">{phase.name}</span>
+                          <Pill tone={STATUS_TONE[phase.status]}>{phase.status}</Pill>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           </Section>
         </>
