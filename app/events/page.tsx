@@ -14,7 +14,10 @@ const DOT_COLOR: Record<EventColor, string> = {
 };
 
 function toKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 function addDays(d: Date, n: number) {
   const r = new Date(d);
@@ -80,11 +83,10 @@ export default function EventsPage() {
       <PageHeader eyebrow="Schedule" title="Events" subtitle="Scroll for the week, drag down for the month." />
 
       <div className="px-5 pb-3">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {strip.map((d) => {
             const key = toKey(d);
             const isSelected = key === selectedKey;
-            const isToday = key === todayKey;
             const dayColors = Array.from(new Set(events.filter((e) => e.date === key).map((e) => e.color))).slice(0, 3);
             return (
               <button
@@ -96,12 +98,10 @@ export default function EventsPage() {
                   {d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3)}
                 </span>
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-[14px] ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-[14px] ${
                     isSelected
-                      ? "bg-cal-accent font-semibold text-surface"
-                      : isToday
-                        ? "border border-cal-accent text-ink"
-                        : "text-ink"
+                      ? "border-cal-accent bg-cal-accent font-semibold text-surface"
+                      : "border-cal-accent text-cal-accent"
                   }`}
                 >
                   {d.getDate()}

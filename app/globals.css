@@ -50,3 +50,11 @@ body {
 ::selection {
   background: var(--accent-soft);
 }
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

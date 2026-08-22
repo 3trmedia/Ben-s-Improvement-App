@@ -11,7 +11,10 @@ const DOT_COLOR: Record<EventColor, string> = {
 };
 
 function toKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function buildMonthGrid(year: number, month: number) {
@@ -34,9 +37,9 @@ export default function CalendarMonth({
   todayKey: string;
   onClose: () => void;
 }) {
-  const base = new Date(todayKey);
-  const [viewYear, setViewYear] = useState(base.getFullYear());
-  const [viewMonth, setViewMonth] = useState(base.getMonth());
+  const [baseYear, baseMonth] = todayKey.split("-").map(Number);
+  const [viewYear, setViewYear] = useState(baseYear);
+  const [viewMonth, setViewMonth] = useState(baseMonth - 1);
   const [popupKey, setPopupKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState(todayKey);
 
