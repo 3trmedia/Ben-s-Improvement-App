@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Section, Card, Pill, Segmented } from "@/components/ui";
-import { productionPipeline, ideaBank, brandMetrics, gear } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/client";
+import { brandMetrics, gear } from "@/lib/mock-data";
 
 const STAGE_TONE: Record<string, "accent" | "warm" | "neutral" | "danger"> = {
   Idea: "neutral",
@@ -14,13 +15,54 @@ const STAGE_TONE: Record<string, "accent" | "warm" | "neutral" | "danger"> = {
   Posted: "accent",
 };
 
-export default function ContentPage() {
-  const [owner, setOwner] = useState<"Personal" | "Blackout" | "Clients">("Personal");
-  const clientNames = Object.keys(productionPipeline.Clients);
-  const [client, setClient] = useState(clientNames[0]);
+type ContentItem = {
+  id: string;
+  owner: string;
+  title: string;
+  stage: string;
+  editor: string | null;
+  format: string | null;
+  due: string | null;
+};
+type Idea = { id: string; tier: string; channel: string; hook: string };
 
-  const items =
-    owner === "Clients" ? productionPipeline.Clients[client] : productionPipeline[owner];
+export default function ContentPage() {
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [ideaBank, setIdeaBank] = useState<Idea[]>([]);
+  const [owner, setOwner] = useState<"Personal" | "Blackout" | "Clients">("Personal");
+  const [client, setClient] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      const [itemsRes, ideasRes] = await Promise.all([
+        supabase.from("content_items").select("*").order("sort_order"),
+        supabase.from("idea_bank").select("*"),
+      ]);
+      if (itemsRes.data) setItems(itemsRes.data as ContentItem[]);
+      if (ideasRes.data) setIdeaBank(ideasRes.data as Idea[]);
+      setLoading(false);
+    }
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const clientNames = useMemo(
+    () => Array.from(new Set(items.filter((i) => i.owner !== "Personal" && i.owner !== "Blackout").map((i) => i.owner))),
+    [items]
+  );
+
+  useEffect(() => {
+    if (!client && clientNames.length) setClient(clientNames[0]);
+  }, [clientNames, client]);
+
+  if (loading) {
+    return <PageHeader eyebrow="Pipeline" title="Content" subtitle="Loading…" />;
+  }
+
+  const visibleItems =
+    owner === "Clients" ? items.filter((i) => i.owner === client) : items.filter((i) => i.owner === owner);
 
   return (
     <>
@@ -45,9 +87,7 @@ export default function ContentPage() {
               key={name}
               onClick={() => setClient(name)}
               className={`shrink-0 rounded-full border px-3 py-1.5 text-[12.5px] font-medium ${
-                client === name
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-line text-ink-soft"
+                client === name ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-soft"
               }`}
             >
               {name}
@@ -56,9 +96,9 @@ export default function ContentPage() {
         </div>
       )}
 
-      <Section title={owner === "Clients" ? client : `${owner} pipeline`}>
+      <Section title={owner === "Clients" ? client || "Clients" : `${owner} pipeline`}>
         <div className="flex flex-col gap-2.5">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <Card key={item.id} accent="none">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[14.5px] font-medium">{item.title}</p>
@@ -108,9 +148,7 @@ export default function ContentPage() {
                 <p className="text-[14px] font-medium">{g.item}</p>
                 <p className="text-[12px] text-ink-soft">{g.location}</p>
               </div>
-              <Pill tone={g.checkedOut ? "warm" : "accent"}>
-                {g.checkedOut ? "Checked out" : "In studio"}
-              </Pill>
+              <Pill tone={g.checkedOut ? "warm" : "accent"}>{g.checkedOut ? "Checked out" : "In studio"}</Pill>
             </Card>
           ))}
         </div>
