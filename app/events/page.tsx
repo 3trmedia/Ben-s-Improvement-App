@@ -288,7 +288,7 @@ export default function EventsPage() {
       )}
 
       <Section title="Weekly review">
-        <Link href="/todo">
+        <Link href="/growth">
           <Card accent="warm" className="flex items-center justify-between">
             <div>
               <p className="text-[14px] font-medium">Top item, every section</p>

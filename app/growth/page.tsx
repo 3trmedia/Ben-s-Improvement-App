@@ -55,7 +55,7 @@ type Goal = {
 type ProjectPhase = { id: string; name: string; status: string; sort_order: number };
 type Project = { id: string; title: string; note: string | null; project_phases: ProjectPhase[] };
 
-export default function TodoPage() {
+export default function GrowthPage() {
   const supabase = createClient();
   const [tab, setTab] = useState<"todo" | "habits" | "goals">("todo");
   const [loading, setLoading] = useState(true);
@@ -64,17 +64,19 @@ export default function TodoPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [walkAwayCount, setWalkAwayCount] = useState(0);
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskEntity, setNewTaskEntity] = useState<Entity>("Personal");
 
   useEffect(() => {
     async function load() {
-      const [tasksRes, habitsRes, goalsRes, projectsRes] = await Promise.all([
+      const [tasksRes, habitsRes, goalsRes, projectsRes, walkawaysRes] = await Promise.all([
         supabase.from("tasks").select("*").order("created_at"),
         supabase.from("habits").select("*").order("sort_order"),
         supabase.from("goals").select("*"),
         supabase.from("projects").select("*, project_phases(*)"),
+        supabase.from("walkaways").select("*", { count: "exact", head: true }),
       ]);
       if (tasksRes.data) setTasks(tasksRes.data as Task[]);
       if (habitsRes.data) setHabits(habitsRes.data as Habit[]);
@@ -87,11 +89,17 @@ export default function TodoPage() {
           }))
         );
       }
+      if (typeof walkawaysRes.count === "number") setWalkAwayCount(walkawaysRes.count);
       setLoading(false);
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const logWalkAway = async () => {
+    setWalkAwayCount((c) => c + 1);
+    await supabase.from("walkaways").insert({});
+  };
 
   const toggleTask = async (task: Task) => {
     const done = !task.done;
@@ -122,12 +130,24 @@ export default function TodoPage() {
   const groups = ["Today", "This week"] as const;
 
   if (loading) {
-    return <PageHeader eyebrow="Master list" title="To-Do & Habits" subtitle="Loading…" />;
+    return <PageHeader eyebrow="Track" title="Growth" subtitle="Loading…" />;
   }
 
   return (
     <>
-      <PageHeader eyebrow="Master list" title="To-Do & Habits" subtitle="3TR, Blackout, and Personal — one list, tagged." />
+      <PageHeader eyebrow="Track" title="Growth" subtitle="3TR, Blackout, and Personal — one list, tagged." />
+
+      <Section title="Times I walked away">
+        <Card accent="none" className="flex items-center justify-between">
+          <p className="font-mono text-[28px] font-semibold tabular-nums">{walkAwayCount}</p>
+          <button
+            onClick={logWalkAway}
+            className="rounded-lg bg-accent px-4 py-2.5 text-[13px] font-medium text-surface"
+          >
+            Times I walked away
+          </button>
+        </Card>
+      </Section>
 
       <div className="px-5 pb-5">
         <Segmented

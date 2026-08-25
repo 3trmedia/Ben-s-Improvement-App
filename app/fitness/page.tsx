@@ -12,10 +12,26 @@ type Exercise = {
   target_weight: string;
 };
 type Workout = { id: string; name: string; exercises: Exercise[] };
-type WorkoutLog = { exercise_id: string; logged_on: string; actual_reps: string; actual_weight: string };
+type WorkoutLog = {
+  id?: string;
+  exercise_id: string;
+  logged_on: string;
+  set_number: number;
+  actual_reps: string;
+  actual_weight: string;
+};
 type BodyEntry = { id: string; logged_on: string; weight: string; note: string | null };
+type SetDraft = { reps: string; weight: string };
 
+const SET_COUNT = 3;
 const today = new Date().toISOString().slice(0, 10);
+
+function formatSets(sets: WorkoutLog[]) {
+  return sets
+    .sort((a, b) => a.set_number - b.set_number)
+    .map((s) => `${s.actual_reps} @ ${s.actual_weight}`)
+    .join(" · ");
+}
 
 export default function FitnessPage() {
   const supabase = createClient();
@@ -23,9 +39,9 @@ export default function FitnessPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [dayId, setDayId] = useState<string>("");
   const [openId, setOpenId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { reps: string; weight: string }>>({});
-  const [lastLogged, setLastLogged] = useState<Record<string, WorkoutLog>>({});
-  const [loggedToday, setLoggedToday] = useState<Record<string, WorkoutLog>>({});
+  const [drafts, setDrafts] = useState<Record<string, SetDraft[]>>({});
+  const [lastLogged, setLastLogged] = useState<Record<string, WorkoutLog[]>>({});
+  const [loggedToday, setLoggedToday] = useState<Record<string, WorkoutLog[]>>({});
   const [body, setBody] = useState<BodyEntry[]>([]);
 
   const [weightInput, setWeightInput] = useState("");
@@ -48,11 +64,19 @@ export default function FitnessPage() {
         setDayId(workoutsRes.data[0]?.id ?? "");
       }
       if (logsRes.data) {
-        const last: Record<string, WorkoutLog> = {};
-        const doneToday: Record<string, WorkoutLog> = {};
+        const byExercise: Record<string, WorkoutLog[]> = {};
         for (const log of logsRes.data as WorkoutLog[]) {
-          if (!last[log.exercise_id]) last[log.exercise_id] = log;
-          if (log.logged_on === today) doneToday[log.exercise_id] = log;
+          (byExercise[log.exercise_id] ??= []).push(log);
+        }
+        const last: Record<string, WorkoutLog[]> = {};
+        const doneToday: Record<string, WorkoutLog[]> = {};
+        for (const [exId, logs] of Object.entries(byExercise)) {
+          const todays = logs.filter((l) => l.logged_on === today);
+          if (todays.length) doneToday[exId] = todays;
+          const mostRecentOtherDay = logs.filter((l) => l.logged_on !== today).sort((a, b) => (a.logged_on < b.logged_on ? 1 : -1))[0]?.logged_on;
+          if (mostRecentOtherDay) {
+            last[exId] = logs.filter((l) => l.logged_on === mostRecentOtherDay);
+          }
         }
         setLastLogged(last);
         setLoggedToday(doneToday);
@@ -66,15 +90,28 @@ export default function FitnessPage() {
 
   const day = workouts.find((d) => d.id === dayId);
 
-  const saveSet = async (exerciseId: string) => {
-    const draft = drafts[exerciseId];
-    if (!draft?.reps || !draft?.weight) return;
-    const { data } = await supabase
-      .from("workout_logs")
-      .insert({ exercise_id: exerciseId, logged_on: today, actual_reps: draft.reps, actual_weight: draft.weight })
-      .select()
-      .single();
-    if (data) setLoggedToday((prev) => ({ ...prev, [exerciseId]: data as WorkoutLog }));
+  const setDraftField = (exerciseId: string, setIndex: number, field: "reps" | "weight", value: string) => {
+    setDrafts((prev) => {
+      const current = prev[exerciseId] ?? Array.from({ length: SET_COUNT }, () => ({ reps: "", weight: "" }));
+      const next = current.map((s, i) => (i === setIndex ? { ...s, [field]: value } : s));
+      return { ...prev, [exerciseId]: next };
+    });
+  };
+
+  const saveSets = async (exerciseId: string) => {
+    const draftSets = drafts[exerciseId] ?? [];
+    const rows = draftSets
+      .map((d, i) => ({
+        exercise_id: exerciseId,
+        logged_on: today,
+        set_number: i + 1,
+        actual_reps: d.reps,
+        actual_weight: d.weight,
+      }))
+      .filter((r) => r.actual_reps.trim() && r.actual_weight.trim());
+    if (!rows.length) return;
+    const { data } = await supabase.from("workout_logs").insert(rows).select();
+    if (data) setLoggedToday((prev) => ({ ...prev, [exerciseId]: data as WorkoutLog[] }));
     setOpenId(null);
   };
 
@@ -108,6 +145,7 @@ export default function FitnessPage() {
             const last = lastLogged[ex.id];
             const done = loggedToday[ex.id];
             const isOpen = openId === ex.id;
+            const draftSets = drafts[ex.id] ?? Array.from({ length: SET_COUNT }, () => ({ reps: "", weight: "" }));
             return (
               <Card key={ex.id} accent={done ? "accent" : "none"}>
                 <div className="flex items-center justify-between gap-2">
@@ -128,29 +166,36 @@ export default function FitnessPage() {
                 </p>
                 {last && !done && (
                   <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-ink-soft">
-                    Last ({last.logged_on}): {last.actual_reps} · {last.actual_weight}
+                    Last ({last[0].logged_on}): {formatSets(last)}
                   </p>
                 )}
                 {done && (
-                  <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-accent">
-                    Done: {done.actual_reps} · {done.actual_weight}
-                  </p>
+                  <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-accent">Done: {formatSets(done)}</p>
                 )}
                 {isOpen && (
-                  <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-                    <input
-                      placeholder="reps, e.g. 6,6,5"
-                      onChange={(e) => setDrafts((p) => ({ ...p, [ex.id]: { ...p[ex.id], reps: e.target.value } }))}
-                      className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
-                    />
-                    <input
-                      placeholder="weight"
-                      onChange={(e) => setDrafts((p) => ({ ...p, [ex.id]: { ...p[ex.id], weight: e.target.value } }))}
-                      className="w-24 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
-                    />
+                  <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+                    {draftSets.map((s, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="w-11 shrink-0 font-mono text-[11px] uppercase tracking-wide text-ink-soft">
+                          Set {i + 1}
+                        </span>
+                        <input
+                          value={s.reps}
+                          placeholder="reps"
+                          onChange={(e) => setDraftField(ex.id, i, "reps", e.target.value)}
+                          className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                        />
+                        <input
+                          value={s.weight}
+                          placeholder="weight"
+                          onChange={(e) => setDraftField(ex.id, i, "weight", e.target.value)}
+                          className="w-24 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                        />
+                      </div>
+                    ))}
                     <button
-                      onClick={() => saveSet(ex.id)}
-                      className="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-medium text-surface"
+                      onClick={() => saveSets(ex.id)}
+                      className="mt-1 rounded-lg bg-accent py-1.5 text-[12.5px] font-medium text-surface"
                     >
                       Save
                     </button>
