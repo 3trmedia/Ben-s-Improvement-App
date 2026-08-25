@@ -137,14 +137,14 @@ export default function GrowthPage() {
     <>
       <PageHeader eyebrow="Track" title="Growth" subtitle="3TR, Blackout, and Personal — one list, tagged." />
 
-      <Section title="Times I walked away">
+      <Section title="Chose Something Better">
         <Card accent="none" className="flex items-center justify-between">
           <p className="font-mono text-[28px] font-semibold tabular-nums">{walkAwayCount}</p>
           <button
             onClick={logWalkAway}
             className="rounded-lg bg-accent px-4 py-2.5 text-[13px] font-medium text-surface"
           >
-            Times I walked away
+            Chose Something Better
           </button>
         </Card>
       </Section>
