@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PageHeader, Section, Card, Pill, Checkbox, useToggleSet } from "@/components/ui";
 import CalendarMonth from "@/components/CalendarMonth";
-import { todos, productionPipeline, clients, events, type EventColor } from "@/lib/mock-data";
+import { todos, productionPipeline, clients, type EventColor, type CalEvent } from "@/lib/mock-data";
+import type { CalendarApiEvent } from "@/app/api/calendar/route";
 
 const DOT_COLOR: Record<EventColor, string> = {
   accent: "bg-accent",
@@ -25,7 +26,7 @@ function addDays(d: Date, n: number) {
   return r;
 }
 
-const today = new Date(2026, 7, 21); // Aug 21, 2026 — matches the environment's current date
+const today = new Date();
 const todayKey = toKey(today);
 const strip = Array.from({ length: 21 }, (_, i) => addDays(today, i - 7));
 
@@ -45,6 +46,23 @@ export default function EventsPage() {
   const [selectedKey, setSelectedKey] = useState(todayKey);
   const [monthOpen, setMonthOpen] = useState(false);
   const dragStartY = useRef<number | null>(null);
+
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [calendarStatus, setCalendarStatus] = useState<"loading" | "connected" | "error">("loading");
+
+  useEffect(() => {
+    fetch("/api/calendar")
+      .then((res) => res.json())
+      .then((data: { events: CalendarApiEvent[]; error?: string }) => {
+        if (data.error) {
+          setCalendarStatus("error");
+          return;
+        }
+        setEvents(data.events.map((e) => ({ ...e, color: "info" as const })));
+        setCalendarStatus("connected");
+      })
+      .catch(() => setCalendarStatus("error"));
+  }, []);
 
   const { set, toggle } = useToggleSet();
   const [capture, setCapture] = useState("");
@@ -139,7 +157,9 @@ export default function EventsPage() {
       <Section title={selectedIsToday ? `Today · ${selectedLabel}` : selectedLabel}>
         {dayEvents.length === 0 ? (
           <Card accent="none">
-            <p className="text-[13.5px] text-ink-soft">No events.</p>
+            <p className="text-[13.5px] text-ink-soft">
+              {calendarStatus === "loading" ? "Loading…" : "No events."}
+            </p>
           </Card>
         ) : (
           <div className="flex flex-col gap-2.5">
@@ -150,7 +170,8 @@ export default function EventsPage() {
                   <div>
                     <p className="text-[14.5px] font-medium">{e.title}</p>
                     <p className="mt-0.5 text-[12.5px] text-ink-soft">
-                      {e.start} – {e.end}
+                      {e.start}
+                      {e.end ? ` – ${e.end}` : ""}
                       {e.location ? ` · ${e.location}` : ""}
                     </p>
                   </div>
@@ -164,12 +185,20 @@ export default function EventsPage() {
       <Section title="Google Calendar">
         <Card accent="none" className="flex items-center justify-between">
           <div>
-            <p className="text-[14px] font-medium">Not connected yet</p>
-            <p className="text-[12.5px] text-ink-soft">Showing mock schedule for now</p>
+            <p className="text-[14px] font-medium">
+              {calendarStatus === "connected" ? "Connected" : calendarStatus === "error" ? "Couldn't load" : "Loading…"}
+            </p>
+            <p className="text-[12.5px] text-ink-soft">
+              {calendarStatus === "connected"
+                ? "Private iCal feed — read-only"
+                : calendarStatus === "error"
+                  ? "Check the feed URL"
+                  : "Fetching your schedule"}
+            </p>
           </div>
-          <button className="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-medium text-surface">
-            Connect
-          </button>
+          <Pill tone={calendarStatus === "connected" ? "accent" : calendarStatus === "error" ? "danger" : "neutral"}>
+            {calendarStatus}
+          </Pill>
         </Card>
       </Section>
 
