@@ -25,10 +25,9 @@ function addDays(d: Date, n: number) {
   r.setDate(r.getDate() + n);
   return r;
 }
-
-const today = new Date();
-const todayKey = toKey(today);
-const strip = Array.from({ length: 21 }, (_, i) => addDays(today, i - 7));
+function startOfWeek(d: Date) {
+  return addDays(d, -d.getDay()); // Sunday = 0
+}
 
 const dueTodos = todos.filter((t) => t.due === "Today");
 
@@ -43,6 +42,12 @@ const dueContent = [
 const dueClients = clients.filter((c) => c.nextTouch === "Today");
 
 export default function EventsPage() {
+  // Computed fresh every render — this was previously a module-level constant
+  // that only evaluated once at build/first-load, so "today" went stale.
+  const today = new Date();
+  const todayKey = toKey(today);
+  const strip = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(today), i));
+
   const [selectedKey, setSelectedKey] = useState(todayKey);
   const [monthOpen, setMonthOpen] = useState(false);
   const dragStartY = useRef<number | null>(null);
@@ -98,10 +103,10 @@ export default function EventsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Schedule" title="Events" subtitle="Scroll for the week, drag down for the month." />
+      <PageHeader eyebrow="Schedule" title="Events" subtitle="This week, today highlighted. Drag down for the month." />
 
       <div className="px-5 pb-3">
-        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-7 gap-1">
           {strip.map((d) => {
             const key = toKey(d);
             const isSelected = key === selectedKey;
@@ -110,7 +115,7 @@ export default function EventsPage() {
               <button
                 key={key}
                 onClick={() => setSelectedKey(key)}
-                className="flex shrink-0 flex-col items-center gap-1.5 rounded-xl px-2.5 py-2"
+                className="flex flex-col items-center gap-1.5 rounded-xl px-1 py-2"
               >
                 <span className="font-mono text-[10px] uppercase tracking-wide text-ink-soft">
                   {d.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3)}
