@@ -187,26 +187,6 @@ export default function EventsPage() {
         )}
       </Section>
 
-      <Section title="Google Calendar">
-        <Card accent="none" className="flex items-center justify-between">
-          <div>
-            <p className="text-[14px] font-medium">
-              {calendarStatus === "connected" ? "Connected" : calendarStatus === "error" ? "Couldn't load" : "Loading…"}
-            </p>
-            <p className="text-[12.5px] text-ink-soft">
-              {calendarStatus === "connected"
-                ? "Private iCal feed — read-only"
-                : calendarStatus === "error"
-                  ? "Check the feed URL"
-                  : "Fetching your schedule"}
-            </p>
-          </div>
-          <Pill tone={calendarStatus === "connected" ? "accent" : calendarStatus === "error" ? "danger" : "neutral"}>
-            {calendarStatus}
-          </Pill>
-        </Card>
-      </Section>
-
       <Section title="Quick capture">
         <Card accent="none">
           <div className="flex gap-2">
