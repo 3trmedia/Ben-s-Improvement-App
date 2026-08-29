@@ -24,13 +24,60 @@ type BodyEntry = { id: string; logged_on: string; weight: string; note: string |
 type SetDraft = { reps: string; weight: string };
 
 const SET_COUNT = 3;
-const today = new Date().toISOString().slice(0, 10);
+
+// Workout "days" run 4am-to-4am, not midnight-to-midnight — a late-night
+// session after midnight still counts as the day that's ending, not a new one.
+function gymDay(d = new Date()) {
+  const shifted = new Date(d);
+  shifted.setHours(shifted.getHours() - 4);
+  const y = shifted.getFullYear();
+  const m = String(shifted.getMonth() + 1).padStart(2, "0");
+  const day = String(shifted.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function formatSets(sets: WorkoutLog[]) {
   return sets
     .sort((a, b) => a.set_number - b.set_number)
     .map((s) => `${s.actual_reps} @ ${s.actual_weight}`)
     .join(" · ");
+}
+
+function parseTargetUpper(targetReps: string): number | null {
+  const nums = targetReps.match(/\d+/g);
+  if (!nums) return null;
+  return Math.max(...nums.map(Number));
+}
+
+function parseWeight(w: string): { value: number; unit: string } | null {
+  const m = w.trim().match(/^([\d.]+)\s*(.*)$/);
+  if (!m) return null;
+  return { value: parseFloat(m[1]), unit: m[2].trim() };
+}
+
+function nextIncrement(weight: number) {
+  if (weight <= 30) return 2.5;
+  if (weight <= 100) return 5;
+  return 10;
+}
+
+// Simple progressive-overload heuristic: hit the top of the rep range on
+// every set last time -> bump the weight; otherwise repeat it. Increment size
+// scales with the weight itself so a 20 lb dumbbell doesn't jump the same
+// amount as a 275 lb deadlift. This is a starting rule, not tuned per-lift.
+function suggestNext(exercise: Exercise, lastSets: WorkoutLog[] | undefined): string | null {
+  if (!lastSets?.length) return null;
+  const targetUpper = parseTargetUpper(exercise.target_reps);
+  if (targetUpper == null) return null;
+  const parsed = lastSets.map((s) => parseWeight(s.actual_weight)).filter((w): w is { value: number; unit: string } => !!w);
+  if (!parsed.length) return null;
+  const { value, unit } = parsed[0];
+  const allMetTarget = lastSets.every((s) => {
+    const reps = parseInt(s.actual_reps, 10);
+    return !Number.isNaN(reps) && reps >= targetUpper;
+  });
+  const nextValue = allMetTarget ? value + nextIncrement(value) : value;
+  return unit ? `${nextValue} ${unit}` : `${nextValue}`;
 }
 
 export default function FitnessPage() {
@@ -46,6 +93,8 @@ export default function FitnessPage() {
 
   const [weightInput, setWeightInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
+
+  const today = gymDay();
 
   useEffect(() => {
     async function load() {
@@ -98,20 +147,48 @@ export default function FitnessPage() {
     });
   };
 
+  const openLogger = (exercise: Exercise) => {
+    if (openId === exercise.id) {
+      setOpenId(null);
+      return;
+    }
+    const existing = loggedToday[exercise.id];
+    const suggestion = suggestNext(exercise, lastLogged[exercise.id]);
+    const initial: SetDraft[] = Array.from({ length: SET_COUNT }, (_, i) => {
+      const row = existing?.find((r) => r.set_number === i + 1);
+      if (row) return { reps: row.actual_reps, weight: row.actual_weight };
+      return { reps: "", weight: suggestion ?? "" };
+    });
+    setDrafts((prev) => ({ ...prev, [exercise.id]: initial }));
+    setOpenId(exercise.id);
+  };
+
   const saveSets = async (exerciseId: string) => {
     const draftSets = drafts[exerciseId] ?? [];
-    const rows = draftSets
-      .map((d, i) => ({
-        exercise_id: exerciseId,
-        logged_on: today,
-        set_number: i + 1,
-        actual_reps: d.reps,
-        actual_weight: d.weight,
-      }))
-      .filter((r) => r.actual_reps.trim() && r.actual_weight.trim());
-    if (!rows.length) return;
-    const { data } = await supabase.from("workout_logs").insert(rows).select();
-    if (data) setLoggedToday((prev) => ({ ...prev, [exerciseId]: data as WorkoutLog[] }));
+    const existing = loggedToday[exerciseId] ?? [];
+    const results: WorkoutLog[] = [];
+    for (let i = 0; i < SET_COUNT; i++) {
+      const d = draftSets[i];
+      if (!d?.reps.trim() || !d?.weight.trim()) continue;
+      const existingRow = existing.find((r) => r.set_number === i + 1);
+      if (existingRow?.id) {
+        const { data } = await supabase
+          .from("workout_logs")
+          .update({ actual_reps: d.reps, actual_weight: d.weight })
+          .eq("id", existingRow.id)
+          .select()
+          .single();
+        if (data) results.push(data as WorkoutLog);
+      } else {
+        const { data } = await supabase
+          .from("workout_logs")
+          .insert({ exercise_id: exerciseId, logged_on: today, set_number: i + 1, actual_reps: d.reps, actual_weight: d.weight })
+          .select()
+          .single();
+        if (data) results.push(data as WorkoutLog);
+      }
+    }
+    if (results.length) setLoggedToday((prev) => ({ ...prev, [exerciseId]: results }));
     setOpenId(null);
   };
 
@@ -145,21 +222,21 @@ export default function FitnessPage() {
             const last = lastLogged[ex.id];
             const done = loggedToday[ex.id];
             const isOpen = openId === ex.id;
+            const suggestion = !done ? suggestNext(ex, last) : null;
             const draftSets = drafts[ex.id] ?? Array.from({ length: SET_COUNT }, () => ({ reps: "", weight: "" }));
             return (
               <Card key={ex.id} accent={done ? "accent" : "none"}>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[14.5px] font-medium">{ex.name}</p>
-                  {done ? (
-                    <Pill tone="accent">logged today</Pill>
-                  ) : (
+                  <div className="flex items-center gap-2">
+                    {done && <Pill tone="accent">logged today</Pill>}
                     <button
-                      onClick={() => setOpenId(isOpen ? null : ex.id)}
+                      onClick={() => openLogger(ex)}
                       className="font-mono text-[11px] uppercase tracking-widest text-accent"
                     >
-                      {isOpen ? "Cancel" : "Log"}
+                      {isOpen ? "Cancel" : done ? "Edit" : "Log"}
                     </button>
-                  )}
+                  </div>
                 </div>
                 <p className="mt-1 font-mono text-[12.5px] tabular-nums text-ink-soft">
                   Target: {ex.target_sets} × {ex.target_reps} · {ex.target_weight}
@@ -168,6 +245,9 @@ export default function FitnessPage() {
                   <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-ink-soft">
                     Last ({last[0].logged_on}): {formatSets(last)}
                   </p>
+                )}
+                {suggestion && (
+                  <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-accent">Suggested: {suggestion}</p>
                 )}
                 {done && (
                   <p className="mt-0.5 font-mono text-[11.5px] tabular-nums text-accent">Done: {formatSets(done)}</p>
