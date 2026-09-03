@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader, Section, Card, Segmented, Pill } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
 
 type Exercise = {
   id: string;
@@ -34,6 +35,26 @@ function gymDay(d = new Date()) {
   const m = String(shifted.getMonth() + 1).padStart(2, "0");
   const day = String(shifted.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function deriveLogState(rawLogs: WorkoutLog[], today: string) {
+  const byExercise: Record<string, WorkoutLog[]> = {};
+  for (const log of rawLogs) {
+    (byExercise[log.exercise_id] ??= []).push(log);
+  }
+  const last: Record<string, WorkoutLog[]> = {};
+  const doneToday: Record<string, WorkoutLog[]> = {};
+  for (const [exId, logs] of Object.entries(byExercise)) {
+    const todays = logs.filter((l) => l.logged_on === today);
+    if (todays.length) doneToday[exId] = todays;
+    const mostRecentOtherDay = logs
+      .filter((l) => l.logged_on !== today)
+      .sort((a, b) => (a.logged_on < b.logged_on ? 1 : -1))[0]?.logged_on;
+    if (mostRecentOtherDay) {
+      last[exId] = logs.filter((l) => l.logged_on === mostRecentOtherDay);
+    }
+  }
+  return { last, doneToday };
 }
 
 function formatSets(sets: WorkoutLog[]) {
@@ -98,6 +119,26 @@ export default function FitnessPage() {
 
   useEffect(() => {
     async function load() {
+      if (!navigator.onLine) {
+        const [cWorkouts, cLogs, cBody] = await Promise.all([
+          cacheGet<Workout[]>("workouts"),
+          cacheGet<WorkoutLog[]>("workoutLogsAll"),
+          cacheGet<BodyEntry[]>("bodyLog"),
+        ]);
+        if (cWorkouts) {
+          setWorkouts(cWorkouts);
+          setDayId(cWorkouts[0]?.id ?? "");
+        }
+        if (cLogs) {
+          const { last, doneToday } = deriveLogState(cLogs, today);
+          setLastLogged(last);
+          setLoggedToday(doneToday);
+        }
+        if (cBody) setBody(cBody);
+        setLoading(false);
+        return;
+      }
+
       const [workoutsRes, logsRes, bodyRes] = await Promise.all([
         supabase
           .from("workouts")
@@ -111,26 +152,19 @@ export default function FitnessPage() {
       if (workoutsRes.data) {
         setWorkouts(workoutsRes.data as Workout[]);
         setDayId(workoutsRes.data[0]?.id ?? "");
+        cacheSet("workouts", workoutsRes.data);
       }
       if (logsRes.data) {
-        const byExercise: Record<string, WorkoutLog[]> = {};
-        for (const log of logsRes.data as WorkoutLog[]) {
-          (byExercise[log.exercise_id] ??= []).push(log);
-        }
-        const last: Record<string, WorkoutLog[]> = {};
-        const doneToday: Record<string, WorkoutLog[]> = {};
-        for (const [exId, logs] of Object.entries(byExercise)) {
-          const todays = logs.filter((l) => l.logged_on === today);
-          if (todays.length) doneToday[exId] = todays;
-          const mostRecentOtherDay = logs.filter((l) => l.logged_on !== today).sort((a, b) => (a.logged_on < b.logged_on ? 1 : -1))[0]?.logged_on;
-          if (mostRecentOtherDay) {
-            last[exId] = logs.filter((l) => l.logged_on === mostRecentOtherDay);
-          }
-        }
+        const raw = logsRes.data as WorkoutLog[];
+        const { last, doneToday } = deriveLogState(raw, today);
         setLastLogged(last);
         setLoggedToday(doneToday);
+        cacheSet("workoutLogsAll", raw);
       }
-      if (bodyRes.data) setBody(bodyRes.data as BodyEntry[]);
+      if (bodyRes.data) {
+        setBody(bodyRes.data as BodyEntry[]);
+        cacheSet("bodyLog", bodyRes.data);
+      }
       setLoading(false);
     }
     load();
@@ -172,36 +206,50 @@ export default function FitnessPage() {
       if (!d?.reps.trim() || !d?.weight.trim()) continue;
       const existingRow = existing.find((r) => r.set_number === i + 1);
       if (existingRow?.id) {
-        const { data } = await supabase
-          .from("workout_logs")
-          .update({ actual_reps: d.reps, actual_weight: d.weight })
-          .eq("id", existingRow.id)
-          .select()
-          .single();
-        if (data) results.push(data as WorkoutLog);
+        const updated: WorkoutLog = { ...existingRow, actual_reps: d.reps, actual_weight: d.weight };
+        results.push(updated);
+        await writeOrQueue({
+          table: "workout_logs",
+          op: "update",
+          payload: { actual_reps: d.reps, actual_weight: d.weight },
+          match: { id: existingRow.id },
+        });
       } else {
-        const { data } = await supabase
-          .from("workout_logs")
-          .insert({ exercise_id: exerciseId, logged_on: today, set_number: i + 1, actual_reps: d.reps, actual_weight: d.weight })
-          .select()
-          .single();
-        if (data) results.push(data as WorkoutLog);
+        const row: WorkoutLog = {
+          id: crypto.randomUUID(),
+          exercise_id: exerciseId,
+          logged_on: today,
+          set_number: i + 1,
+          actual_reps: d.reps,
+          actual_weight: d.weight,
+        };
+        results.push(row);
+        await writeOrQueue({ table: "workout_logs", op: "insert", payload: row });
       }
     }
-    if (results.length) setLoggedToday((prev) => ({ ...prev, [exerciseId]: results }));
+    if (results.length) {
+      setLoggedToday((prev) => ({ ...prev, [exerciseId]: results }));
+      const cached = (await cacheGet<WorkoutLog[]>("workoutLogsAll")) ?? [];
+      const withoutOld = cached.filter((l) => !results.some((r) => r.id === l.id));
+      cacheSet("workoutLogsAll", [...withoutOld, ...results]);
+    }
     setOpenId(null);
   };
 
   const addBodyEntry = async () => {
     if (!weightInput.trim()) return;
-    const { data } = await supabase
-      .from("body_log")
-      .insert({ logged_on: today, weight: weightInput.trim(), note: noteInput.trim() || null })
-      .select()
-      .single();
-    if (data) setBody((prev) => [data as BodyEntry, ...prev]);
+    const entry: BodyEntry = {
+      id: crypto.randomUUID(),
+      logged_on: today,
+      weight: weightInput.trim(),
+      note: noteInput.trim() || null,
+    };
+    const updated = [entry, ...body];
+    setBody(updated);
+    cacheSet("bodyLog", updated);
     setWeightInput("");
     setNoteInput("");
+    await writeOrQueue({ table: "body_log", op: "insert", payload: entry });
   };
 
   if (loading || !day) {

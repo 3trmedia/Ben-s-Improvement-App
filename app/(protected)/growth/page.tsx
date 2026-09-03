@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader, Section, Card, Pill, Segmented, Checkbox, ProgressBar } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
 import type { Entity } from "@/lib/mock-data";
 
 const STATUS_TONE: Record<string, "accent" | "warm" | "neutral"> = {
@@ -71,6 +72,23 @@ export default function GrowthPage() {
 
   useEffect(() => {
     async function load() {
+      if (!navigator.onLine) {
+        const [cTasks, cHabits, cGoals, cProjects, cWalk] = await Promise.all([
+          cacheGet<Task[]>("tasks"),
+          cacheGet<Habit[]>("habits"),
+          cacheGet<Goal[]>("goals"),
+          cacheGet<Project[]>("projects"),
+          cacheGet<number>("walkawayCount"),
+        ]);
+        if (cTasks) setTasks(cTasks);
+        if (cHabits) setHabits(cHabits);
+        if (cGoals) setGoals(cGoals);
+        if (cProjects) setProjects(cProjects);
+        if (cWalk) setWalkAwayCount(cWalk);
+        setLoading(false);
+        return;
+      }
+
       const [tasksRes, habitsRes, goalsRes, projectsRes, walkawaysRes] = await Promise.all([
         supabase.from("tasks").select("*").order("created_at"),
         supabase.from("habits").select("*").order("sort_order"),
@@ -78,18 +96,30 @@ export default function GrowthPage() {
         supabase.from("projects").select("*, project_phases(*)"),
         supabase.from("walkaways").select("*", { count: "exact", head: true }),
       ]);
-      if (tasksRes.data) setTasks(tasksRes.data as Task[]);
-      if (habitsRes.data) setHabits(habitsRes.data as Habit[]);
-      if (goalsRes.data) setGoals(goalsRes.data as Goal[]);
-      if (projectsRes.data) {
-        setProjects(
-          (projectsRes.data as Project[]).map((p) => ({
-            ...p,
-            project_phases: [...p.project_phases].sort((a, b) => a.sort_order - b.sort_order),
-          }))
-        );
+      if (tasksRes.data) {
+        setTasks(tasksRes.data as Task[]);
+        cacheSet("tasks", tasksRes.data);
       }
-      if (typeof walkawaysRes.count === "number") setWalkAwayCount(walkawaysRes.count);
+      if (habitsRes.data) {
+        setHabits(habitsRes.data as Habit[]);
+        cacheSet("habits", habitsRes.data);
+      }
+      if (goalsRes.data) {
+        setGoals(goalsRes.data as Goal[]);
+        cacheSet("goals", goalsRes.data);
+      }
+      if (projectsRes.data) {
+        const sorted = (projectsRes.data as Project[]).map((p) => ({
+          ...p,
+          project_phases: [...p.project_phases].sort((a, b) => a.sort_order - b.sort_order),
+        }));
+        setProjects(sorted);
+        cacheSet("projects", sorted);
+      }
+      if (typeof walkawaysRes.count === "number") {
+        setWalkAwayCount(walkawaysRes.count);
+        cacheSet("walkawayCount", walkawaysRes.count);
+      }
       setLoading(false);
     }
     load();
@@ -97,25 +127,36 @@ export default function GrowthPage() {
   }, []);
 
   const logWalkAway = async () => {
-    setWalkAwayCount((c) => c + 1);
-    await supabase.from("walkaways").insert({});
+    const next = walkAwayCount + 1;
+    setWalkAwayCount(next);
+    cacheSet("walkawayCount", next);
+    await writeOrQueue({ table: "walkaways", op: "insert", payload: { id: crypto.randomUUID() } });
   };
 
   const toggleTask = async (task: Task) => {
     const done = !task.done;
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, done } : t)));
-    await supabase.from("tasks").update({ done }).eq("id", task.id);
+    const updated = tasks.map((t) => (t.id === task.id ? { ...t, done } : t));
+    setTasks(updated);
+    cacheSet("tasks", updated);
+    await writeOrQueue({ table: "tasks", op: "update", payload: { done }, match: { id: task.id } });
   };
 
   const addTask = async () => {
     if (!newTaskTitle.trim()) return;
-    const { data } = await supabase
-      .from("tasks")
-      .insert({ title: newTaskTitle.trim(), entity: newTaskEntity, priority: "medium", due: "Today" })
-      .select()
-      .single();
-    if (data) setTasks((prev) => [...prev, data as Task]);
+    const newTask: Task = {
+      id: crypto.randomUUID(),
+      title: newTaskTitle.trim(),
+      next_action: null,
+      entity: newTaskEntity,
+      priority: "medium",
+      due: "Today",
+      done: false,
+    };
+    const updated = [...tasks, newTask];
+    setTasks(updated);
+    cacheSet("tasks", updated);
     setNewTaskTitle("");
+    await writeOrQueue({ table: "tasks", op: "insert", payload: newTask });
   };
 
   const toggleHabitToday = async (habit: Habit) => {
@@ -123,8 +164,10 @@ export default function GrowthPage() {
     const next = wasFull
       ? Math.max(0, habit.done_this_week - 1)
       : Math.min(habit.target_per_week, habit.done_this_week + 1);
-    setHabits((prev) => prev.map((h) => (h.id === habit.id ? { ...h, done_this_week: next } : h)));
-    await supabase.from("habits").update({ done_this_week: next }).eq("id", habit.id);
+    const updated = habits.map((h) => (h.id === habit.id ? { ...h, done_this_week: next } : h));
+    setHabits(updated);
+    cacheSet("habits", updated);
+    await writeOrQueue({ table: "habits", op: "update", payload: { done_this_week: next }, match: { id: habit.id } });
   };
 
   const groups = ["Today", "This week"] as const;
