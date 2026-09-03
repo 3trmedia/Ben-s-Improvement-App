@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Section, Card, Pill, Segmented, Checkbox, ProgressBar } from "@/components/ui";
+import {
+  PageHeader,
+  Section,
+  Card,
+  Pill,
+  Segmented,
+  Checkbox,
+  ProgressBar,
+  SelectableCard,
+  SelectionBar,
+  ConfirmModal,
+} from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
 import type { Entity } from "@/lib/mock-data";
@@ -69,6 +80,28 @@ export default function GrowthPage() {
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskEntity, setNewTaskEntity] = useState<Entity>("Personal");
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+
+  const enterSelectMode = (id: string) => {
+    setSelectMode(true);
+    setSelected(new Set([id]));
+  };
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (next.size === 0) setSelectMode(false);
+      return next;
+    });
+  };
+  const cancelSelection = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
 
   useEffect(() => {
     async function load() {
@@ -170,6 +203,40 @@ export default function GrowthPage() {
     await writeOrQueue({ table: "habits", op: "update", payload: { done_this_week: next }, match: { id: habit.id } });
   };
 
+  const changeTab = (next: "todo" | "habits" | "goals") => {
+    cancelSelection();
+    setTab(next);
+  };
+
+  const deleteTask = async (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await supabase.from("tasks").delete().eq("id", id);
+  };
+  const deleteHabit = async (id: string) => {
+    setHabits((prev) => prev.filter((h) => h.id !== id));
+    await supabase.from("habits").delete().eq("id", id);
+  };
+  const deleteGoal = async (id: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== id));
+    await supabase.from("goals").delete().eq("id", id);
+  };
+
+  const deleteSelected = async () => {
+    const ids = Array.from(selected);
+    setBulkConfirmOpen(false);
+    if (tab === "todo") {
+      setTasks((prev) => prev.filter((t) => !selected.has(t.id)));
+      await supabase.from("tasks").delete().in("id", ids);
+    } else if (tab === "habits") {
+      setHabits((prev) => prev.filter((h) => !selected.has(h.id)));
+      await supabase.from("habits").delete().in("id", ids);
+    } else {
+      setGoals((prev) => prev.filter((g) => !selected.has(g.id)));
+      await supabase.from("goals").delete().in("id", ids);
+    }
+    cancelSelection();
+  };
+
   const groups = ["Today", "This week"] as const;
 
   if (loading) {
@@ -192,10 +259,18 @@ export default function GrowthPage() {
         </Card>
       </Section>
 
+      <SelectionBar count={selectMode ? selected.size : 0} onDelete={() => setBulkConfirmOpen(true)} onCancel={cancelSelection} />
+      <ConfirmModal
+        open={bulkConfirmOpen}
+        title={`Delete ${selected.size} item${selected.size === 1 ? "" : "s"}?`}
+        onCancel={() => setBulkConfirmOpen(false)}
+        onConfirm={deleteSelected}
+      />
+
       <div className="px-5 pb-5">
         <Segmented
           value={tab}
-          onChange={setTab}
+          onChange={changeTab}
           options={[
             { value: "todo", label: "To-Do" },
             { value: "habits", label: "Habits" },
@@ -241,9 +316,18 @@ export default function GrowthPage() {
               <Section key={group} title={group}>
                 <div className="flex flex-col gap-2.5">
                   {items.map((t) => (
-                    <Card key={t.id} accent={ENTITY_CARD_TONE[t.entity]}>
+                    <SelectableCard
+                      key={t.id}
+                      accent={ENTITY_CARD_TONE[t.entity]}
+                      selectMode={selectMode}
+                      selected={selected.has(t.id)}
+                      onToggleSelect={() => toggleSelect(t.id)}
+                      onLongPress={() => enterSelectMode(t.id)}
+                      onDelete={() => deleteTask(t.id)}
+                      deleteTitle={`Delete "${t.title}"?`}
+                    >
                       <div className="flex items-start gap-3">
-                        <Checkbox checked={t.done} onChange={() => toggleTask(t)} />
+                        <Checkbox checked={t.done} onChange={() => !selectMode && toggleTask(t)} />
                         <div className="min-w-0 flex-1">
                           <p
                             className={`text-[14.5px] font-medium ${
@@ -261,7 +345,7 @@ export default function GrowthPage() {
                           </div>
                         </div>
                       </div>
-                    </Card>
+                    </SelectableCard>
                   ))}
                 </div>
               </Section>
@@ -274,13 +358,24 @@ export default function GrowthPage() {
         <Section title="Check-off, not streak-guilt">
           <div className="flex flex-col gap-2.5">
             {habits.map((h) => (
-              <Card key={h.id} accent="none">
+              <SelectableCard
+                key={h.id}
+                selectMode={selectMode}
+                selected={selected.has(h.id)}
+                onToggleSelect={() => toggleSelect(h.id)}
+                onLongPress={() => enterSelectMode(h.id)}
+                onDelete={() => deleteHabit(h.id)}
+                deleteTitle={`Delete "${h.label}"?`}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[14px] font-medium">{h.label}</p>
                     <p className="text-[12px] text-ink-soft">{h.cadence}</p>
                   </div>
-                  <Checkbox checked={h.done_this_week >= h.target_per_week} onChange={() => toggleHabitToday(h)} />
+                  <Checkbox
+                    checked={h.done_this_week >= h.target_per_week}
+                    onChange={() => !selectMode && toggleHabitToday(h)}
+                  />
                 </div>
                 <div className="mt-3 border-t border-line pt-3">
                   <ProgressBar
@@ -289,7 +384,7 @@ export default function GrowthPage() {
                     label={`${h.done_this_week}/${h.target_per_week} this week`}
                   />
                 </div>
-              </Card>
+              </SelectableCard>
             ))}
           </div>
         </Section>
@@ -312,13 +407,22 @@ export default function GrowthPage() {
                   }
                 }
                 return (
-                  <Card key={g.id} accent="warm">
+                  <SelectableCard
+                    key={g.id}
+                    accent="warm"
+                    selectMode={selectMode}
+                    selected={selected.has(g.id)}
+                    onToggleSelect={() => toggleSelect(g.id)}
+                    onLongPress={() => enterSelectMode(g.id)}
+                    onDelete={() => deleteGoal(g.id)}
+                    deleteTitle={`Delete "${g.title}"?`}
+                  >
                     <p className="text-[14.5px] font-medium">{g.title}</p>
                     {g.note && <p className="mt-1 text-[12.5px] text-ink-soft">{g.note}</p>}
                     <div className="mt-3 border-t border-line pt-3">
                       <ProgressBar current={current} target={target} label={label} tone="warm" />
                     </div>
-                  </Card>
+                  </SelectableCard>
                 );
               })}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 export function PageHeader({
   eyebrow,
@@ -272,6 +272,168 @@ export function QuickAdjust({
         </button>
       </div>
     </Card>
+  );
+}
+
+export function ConfirmModal({
+  open,
+  title,
+  message,
+  confirmLabel = "Delete",
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-6"
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-xs rounded-2xl border border-line bg-surface p-5"
+      >
+        <p className="text-[15px] font-medium">{title}</p>
+        {message && <p className="mt-1.5 text-[13px] text-ink-soft">{message}</p>}
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-lg border border-line py-2 text-[13px] text-ink-soft"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-lg bg-danger py-2 text-[13px] font-medium text-surface"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const LONG_PRESS_MS = 500;
+
+// Wraps a Card with: a small gray "x" (top-right) that confirms then deletes
+// just this item; and a long-press that enters multi-select mode for the
+// whole list, after which a plain tap toggles this item's selection instead
+// of its normal action (the caller is responsible for neutralizing the
+// card's own interactive elements — e.g. a Checkbox's onChange — while
+// selectMode is active, so a tap doesn't fire both).
+export function SelectableCard({
+  children,
+  selectMode,
+  selected,
+  onToggleSelect,
+  onLongPress,
+  onDelete,
+  deleteTitle = "Delete this?",
+  accent = "none",
+  className = "",
+}: {
+  children: ReactNode;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onLongPress: () => void;
+  onDelete: () => void;
+  deleteTitle?: string;
+  accent?: "accent" | "warm" | "none";
+  className?: string;
+}) {
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const startPress = () => {
+    pressTimer.current = setTimeout(onLongPress, LONG_PRESS_MS);
+  };
+  const cancelPress = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  };
+
+  return (
+    <div
+      className="relative"
+      onPointerDown={startPress}
+      onPointerUp={cancelPress}
+      onPointerLeave={cancelPress}
+      onClick={() => {
+        if (selectMode) onToggleSelect();
+      }}
+    >
+      <Card accent={accent} className={className}>
+        {children}
+      </Card>
+      {selectMode ? (
+        <span
+          className={`absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] ${
+            selected ? "border-accent bg-accent text-surface" : "border-line bg-surface text-transparent"
+          }`}
+        >
+          ✓
+        </span>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmOpen(true);
+          }}
+          aria-label="Delete"
+          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-[11px] text-ink-soft"
+        >
+          ✕
+        </button>
+      )}
+      <ConfirmModal
+        open={confirmOpen}
+        title={deleteTitle}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onDelete();
+        }}
+      />
+    </div>
+  );
+}
+
+export function SelectionBar({
+  count,
+  onDelete,
+  onCancel,
+}: {
+  count: number;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <div className="fixed right-3 top-14 z-50 flex items-center gap-2.5 rounded-full border border-line bg-surface/95 px-3 py-2 backdrop-blur">
+      <span className="font-mono text-[11px] tabular-nums text-ink-soft">{count}</span>
+      <button onClick={onDelete} aria-label="Delete selected" className="text-danger">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13M10 11v6M14 11v6"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <button onClick={onCancel} className="font-mono text-[11px] uppercase tracking-widest text-ink-soft">
+        Cancel
+      </button>
+    </div>
   );
 }
 
