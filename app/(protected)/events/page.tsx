@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { PageHeader, Section, Card, Pill, Checkbox, useToggleSet } from "@/components/ui";
+import { PageHeader, Section, Card, Pill } from "@/components/ui";
 import CalendarMonth from "@/components/CalendarMonth";
-import { todos, productionPipeline, clients, type EventColor, type CalEvent } from "@/lib/mock-data";
+import type { EventColor, CalEvent } from "@/lib/mock-data";
 import type { CalendarApiEvent } from "@/app/api/calendar/route";
 
 const DOT_COLOR: Record<EventColor, string> = {
@@ -28,18 +28,6 @@ function addDays(d: Date, n: number) {
 function startOfWeek(d: Date) {
   return addDays(d, -d.getDay()); // Sunday = 0
 }
-
-const dueTodos = todos.filter((t) => t.due === "Today");
-
-const dueContent = [
-  ...productionPipeline.Personal.map((c) => ({ ...c, owner: "Personal" })),
-  ...productionPipeline.Blackout.map((c) => ({ ...c, owner: "Blackout" })),
-  ...Object.entries(productionPipeline.Clients).flatMap(([client, items]) =>
-    items.map((c) => ({ ...c, owner: client }))
-  ),
-].filter((c) => c.due === "Today");
-
-const dueClients = clients.filter((c) => c.nextTouch === "Today");
 
 export default function EventsPage() {
   // Computed fresh every render — this was previously a module-level constant
@@ -69,7 +57,6 @@ export default function EventsPage() {
       .catch(() => setCalendarStatus("error"));
   }, []);
 
-  const { set, toggle } = useToggleSet();
   const [capture, setCapture] = useState("");
   const [inbox, setInbox] = useState<string[]>([]);
 
@@ -216,61 +203,6 @@ export default function EventsPage() {
           )}
         </Card>
       </Section>
-
-      <Section title={`Due today (${dueTodos.length})`}>
-        <div className="flex flex-col gap-2.5">
-          {dueTodos.map((t) => (
-            <Card key={t.id} accent={t.entity === "Personal" ? "warm" : "accent"}>
-              <div className="flex items-start gap-3">
-                <Checkbox checked={set.has(t.id)} onChange={() => toggle(t.id)} />
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-[14.5px] font-medium ${
-                      set.has(t.id) ? "text-ink-soft line-through" : "text-ink"
-                    }`}
-                  >
-                    {t.title}
-                  </p>
-                  <p className="mt-0.5 text-[12.5px] text-ink-soft">{t.nextAction}</p>
-                  <div className="mt-2 flex gap-1.5">
-                    <Pill tone={t.entity === "Personal" ? "warm" : "accent"}>{t.entity}</Pill>
-                    <Pill tone={t.priority === "high" ? "danger" : "neutral"}>{t.priority}</Pill>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </Section>
-
-      {dueContent.length > 0 && (
-        <Section title={`Content due today (${dueContent.length})`}>
-          <div className="flex flex-col gap-2.5">
-            {dueContent.map((c) => (
-              <Card key={c.id} accent="none">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-[14.5px] font-medium">{c.title}</p>
-                  <Pill tone="warm">{c.stage}</Pill>
-                </div>
-                <p className="mt-1 text-[12.5px] text-ink-soft">{c.owner} · {c.format}</p>
-              </Card>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {dueClients.length > 0 && (
-        <Section title={`Client touchpoints today (${dueClients.length})`}>
-          <div className="flex flex-col gap-2.5">
-            {dueClients.map((c) => (
-              <Card key={c.id} accent="none">
-                <p className="text-[14.5px] font-medium">{c.name}</p>
-                <p className="mt-1 text-[12.5px] text-ink-soft">{c.type}</p>
-              </Card>
-            ))}
-          </div>
-        </Section>
-      )}
 
       <Section title="Weekly review">
         <Link href="/growth">
