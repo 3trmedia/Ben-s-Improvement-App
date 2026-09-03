@@ -233,6 +233,48 @@ export function Ring({
   );
 }
 
+export function QuickAdjust({
+  label,
+  value,
+  unit,
+  onIncrement,
+  onDecrement,
+  tone = "accent",
+}: {
+  label: string;
+  value: number;
+  unit: string;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  tone?: "accent" | "danger" | "info";
+}) {
+  const btnTone = tone === "accent" ? "bg-accent" : tone === "danger" ? "bg-danger" : "bg-info";
+  return (
+    <Card accent="none" className="flex items-center justify-between">
+      <div>
+        <p className="font-mono text-[18px] font-semibold tabular-nums">
+          {value} {unit}
+        </p>
+        <p className="text-[12px] text-ink-soft">{label}</p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onDecrement}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-line text-[16px] text-ink-soft"
+        >
+          –
+        </button>
+        <button
+          onClick={onIncrement}
+          className={`flex h-9 w-9 items-center justify-center rounded-lg text-[16px] font-medium text-surface ${btnTone}`}
+        >
+          +
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 export function useToggleSet(initial: string[] = []) {
   const [set, setSet] = useState(new Set(initial));
   const toggle = (id: string) =>
