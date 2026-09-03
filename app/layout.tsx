@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-import BottomNav from "@/components/BottomNav";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -39,12 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${fraunces.variable} ${publicSans.variable} ${plexMono.variable} h-full`}
     >
-      <body className="min-h-full bg-bg text-ink antialiased">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col border-x border-line/60 bg-bg">
-          <main className="flex-1 overflow-y-auto pb-24">{children}</main>
-          <BottomNav />
-        </div>
-      </body>
+      <body className="min-h-full bg-bg text-ink antialiased">{children}</body>
     </html>
   );
 }
