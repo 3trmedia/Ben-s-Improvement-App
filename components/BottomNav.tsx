@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/events", label: "Events", icon: IconToday },
   { href: "/growth", label: "Growth", icon: IconTodo },
-  { href: "/content", label: "Content", icon: IconContent },
   { href: "/calories", label: "Calories", icon: IconCalories },
   { href: "/fitness", label: "Fitness", icon: IconFitness },
 ] as const;
@@ -16,7 +15,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md border-t border-line bg-surface/95 backdrop-blur">
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-4">
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
@@ -66,15 +65,6 @@ function IconTodo({ className }: IconProps) {
       <path d="M12.5 6.5H20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <path d="M12.5 13.5H20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <path d="M12.5 19.5H20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" opacity="0.35" />
-    </svg>
-  );
-}
-
-function IconContent({ className }: IconProps) {
-  return (
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" className={className}>
-      <rect x="3.5" y="5.5" width="17" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M10 9.3L14.2 12L10 14.7V9.3Z" fill="currentColor" />
     </svg>
   );
 }

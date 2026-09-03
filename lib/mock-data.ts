@@ -120,53 +120,6 @@ export const projects = [
   },
 ];
 
-export const ideaBank = [
-  { id: "i1", tier: "Free", channel: "DP Ben B", hook: "Why most agencies underprice discovery calls" },
-  { id: "i2", tier: "$100", channel: "Blackout", hook: "3-format teardown of a competitor's feed" },
-  { id: "i3", tier: "$1,000", channel: "3TR IG", hook: "Client case study: Peak Defense before/after" },
-];
-
-export const productionPipeline = {
-  Personal: [
-    { id: "p1", title: "Agency pricing myths", stage: "Editing", editor: "Christian", format: "Talking head", due: "Aug 25" },
-    { id: "p2", title: "Morning routine breakdown", stage: "Filmed", editor: "—", format: "Vlog cut", due: "Aug 28" },
-  ],
-  Blackout: [
-    { id: "p3", title: "Format #3 — feed teardown", stage: "Scripted", editor: "—", format: "Format 3", due: "Today" },
-    { id: "p4", title: "Format #1 — hook study", stage: "Posted", editor: "Upwork", format: "Format 1", due: "—" },
-  ],
-  Clients: {
-    "Peak Defense": [
-      { id: "p5", title: "Shopify launch teaser", stage: "Delivered", editor: "Christian", format: "Ad cut", due: "—" },
-    ],
-    "J&C": [
-      { id: "p6", title: "Product spotlight reel", stage: "Idea", editor: "—", format: "Reel", due: "Aug 26" },
-    ],
-    "RNR": [
-      { id: "p7", title: "Testimonial cut #2", stage: "Editor assigned", editor: "Christian", format: "Testimonial", due: "Today" },
-    ],
-    "Uptown Drapes": [
-      { id: "p8", title: "Before/after showcase", stage: "Filmed", editor: "—", format: "Showcase", due: "Aug 27" },
-    ],
-    "Hoffman Tactical": [
-      { id: "p9", title: "Range day recap", stage: "Posted", editor: "Upwork", format: "Recap", due: "—" },
-    ],
-  } as Record<string, { id: string; title: string; stage: string; editor: string; format: string; due: string }[]>,
-};
-
-export const brandMetrics = [
-  { id: "m1", channel: "DP Ben B", followers: 8400, change: "+120 this week" },
-  { id: "m2", channel: "Blackout IG", followers: 3100, change: "+64 this week" },
-  { id: "m3", channel: "3TR IG", followers: 1950, change: "+18 this week" },
-];
-
-export const gear = [
-  { id: "g1", item: "Sony A7IV", location: "Studio", checkedOut: false },
-  { id: "g2", item: "Rode Wireless GO II", location: "With Christian", checkedOut: true },
-  { id: "g3", item: "50mm Prime", location: "Studio", checkedOut: false },
-  { id: "g4", item: "Softbox kit", location: "Uptown Drapes shoot", checkedOut: true },
-];
-
 export const clients = [
   { id: "c1", name: "Peak Defense", type: "Shopify template work", status: "Active", contract: "Flat fee", nextTouch: "Aug 22", payment: "Paid" },
   { id: "c2", name: "J&C", type: "Content retainer", status: "Active", contract: "Revenue share", nextTouch: "Aug 24", payment: "Outstanding" },
