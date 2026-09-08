@@ -81,22 +81,41 @@ export async function setHabitCheckin(habitId: string, day: string, checked: boo
   }
 }
 
+function shiftDay(day: string, delta: number) {
+  const [y, m, d] = day.split("-").map(Number);
+  const shifted = new Date(y, m - 1, d + delta);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
+}
+
 // Length of the consecutive-day streak ending on `day` where every habit in
-// `habitIds` has a checkin. Walks backward one day at a time until a day
-// fails the all-habits-done test (capped at a year as a sanity bound).
+// `habitIds` has a checkin. Fetches one bounded window of history in a
+// single query and walks it in memory -- the original version issued one
+// network round-trip per day of the streak (sequentially!), so toggling a
+// single habit checkbox on a 20-day streak meant 20+ awaited requests.
 export async function computeHabitStreak(habitIds: string[], day: string): Promise<number> {
   if (habitIds.length === 0) return 0;
   const supabase = createClient();
+  const windowStart = shiftDay(day, -366);
+  const { data } = await supabase
+    .from("habit_checkins")
+    .select("habit_id, checked_on")
+    .gte("checked_on", windowStart)
+    .lte("checked_on", day);
+
+  const doneByDay = new Map<string, Set<string>>();
+  for (const row of data ?? []) {
+    const key = row.checked_on as string;
+    if (!doneByDay.has(key)) doneByDay.set(key, new Set());
+    doneByDay.get(key)!.add(row.habit_id as string);
+  }
+
   let streak = 0;
   let cursor = day;
   for (let i = 0; i < 366; i++) {
-    const { data } = await supabase.from("habit_checkins").select("habit_id").eq("checked_on", cursor);
-    const doneIds = new Set((data ?? []).map((r) => r.habit_id as string));
-    if (!habitIds.every((id) => doneIds.has(id))) break;
+    const doneIds = doneByDay.get(cursor);
+    if (!doneIds || !habitIds.every((id) => doneIds.has(id))) break;
     streak++;
-    const [y, m, d] = cursor.split("-").map(Number);
-    const prev = new Date(y, m - 1, d - 1);
-    cursor = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-${String(prev.getDate()).padStart(2, "0")}`;
+    cursor = shiftDay(cursor, -1);
   }
   return streak;
 }

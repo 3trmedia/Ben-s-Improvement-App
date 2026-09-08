@@ -94,8 +94,7 @@ type Project = { id: string; title: string; note: string | null; project_phases:
 // crosses its target only ever pays out once, and re-crossing later (e.g. a
 // habit-linked goal after its weekly count resets) doesn't re-pay it.
 async function awardNewlyCompletedGoals(goalsData: Goal[], habitsData: Habit[]) {
-  const supabase = createClient();
-  for (const g of goalsData) {
+  const completed = goalsData.filter((g) => {
     let current = g.current_value;
     let target = g.target_value;
     if (g.metric_kind === "habit" && g.habit_id) {
@@ -105,10 +104,23 @@ async function awardNewlyCompletedGoals(goalsData: Goal[], habitsData: Habit[]) 
         target = h.target_per_week;
       }
     }
-    if (target > 0 && current >= target) {
-      const { data } = await supabase.from("point_events").select("id").eq("source", "goal").eq("source_id", g.id).limit(1);
-      if (!data?.length) await awardPoints("goal", g.id, GOAL_POINTS, g.title);
-    }
+    return target > 0 && current >= target;
+  });
+  if (!completed.length) return;
+
+  // One query for every completed goal's award status instead of one query
+  // per goal -- the old version was a sequential round-trip per goal on
+  // every single Growth page load.
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("point_events")
+    .select("source_id")
+    .eq("source", "goal")
+    .in("source_id", completed.map((g) => g.id));
+  const alreadyAwarded = new Set((data ?? []).map((r) => r.source_id as string));
+
+  for (const g of completed) {
+    if (!alreadyAwarded.has(g.id)) await awardPoints("goal", g.id, GOAL_POINTS, g.title);
   }
 }
 

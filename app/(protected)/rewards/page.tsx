@@ -31,7 +31,7 @@ function RewardTile({
     <div className="relative aspect-square overflow-hidden rounded-xl border border-line bg-surface">
       {reward.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={reward.image_url} alt={reward.name} className="absolute inset-0 h-full w-full object-cover" />
+        <img src={reward.image_url} alt={reward.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-bg text-[12px] text-ink-soft">No image</div>
       )}
@@ -123,14 +123,16 @@ export default function RewardsPage() {
         image_url = supabase.storage.from("reward-images").getPublicUrl(path).data.publicUrl;
       }
     }
-    await supabase.from("rewards").insert({ name: name.trim(), cost: costNum, image_url });
+    const id = crypto.randomUUID();
+    await supabase.from("rewards").insert({ id, name: name.trim(), cost: costNum, image_url });
+    // Append locally instead of re-fetching balance + all rewards + activity.
+    setRewards((prev) => [...prev, { id, name: name.trim(), cost: costNum, image_url, archived: false, starred: false }]);
     setName("");
     setCost("");
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setUploading(false);
     setAddOpen(false);
-    refresh();
   };
 
   const toggleStar = async (reward: Reward) => {
@@ -139,22 +141,27 @@ export default function RewardsPage() {
     await supabase.from("rewards").update({ starred }).eq("id", reward.id);
   };
 
-  const redeem = async (reward: Reward) => {
+  // Optimistic: balance, reward, and the activity feed update immediately;
+  // the two writes fire in the background instead of a 3-query refresh().
+  const redeem = (reward: Reward) => {
     if (balance < reward.cost) return;
-    await supabase.from("point_events").insert({
-      source: "redemption",
-      source_id: reward.id,
-      points: -reward.cost,
-      label: `Redeemed: ${reward.name}`,
-    });
-    await supabase.from("rewards").update({ archived: true }).eq("id", reward.id);
-    refresh();
+    const label = `Redeemed: ${reward.name}`;
+    setBalance((b) => b - reward.cost);
+    setRewards((prev) => prev.map((r) => (r.id === reward.id ? { ...r, archived: true } : r)));
+    setActivity((prev) => [{ id: crypto.randomUUID(), source: "redemption", points: -reward.cost, label, created_at: new Date().toISOString() }, ...prev].slice(0, 10));
+    (async () => {
+      await supabase.from("point_events").insert({ source: "redemption", source_id: reward.id, points: -reward.cost, label });
+      await supabase.from("rewards").update({ archived: true }).eq("id", reward.id);
+    })();
   };
 
-  const undoRedeem = async (reward: Reward) => {
-    await revokeExactPoints("redemption", reward.id);
-    await supabase.from("rewards").update({ archived: false }).eq("id", reward.id);
-    refresh();
+  const undoRedeem = (reward: Reward) => {
+    setBalance((b) => b + reward.cost);
+    setRewards((prev) => prev.map((r) => (r.id === reward.id ? { ...r, archived: false } : r)));
+    (async () => {
+      await revokeExactPoints("redemption", reward.id);
+      await supabase.from("rewards").update({ archived: false }).eq("id", reward.id);
+    })();
   };
 
   const deleteReward = async (reward: Reward) => {
@@ -256,7 +263,7 @@ export default function RewardsPage() {
               <div key={r.id} className="group relative aspect-square overflow-hidden rounded-lg border border-line opacity-60">
                 {r.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.image_url} alt={r.name} className="absolute inset-0 h-full w-full object-cover grayscale" />
+                  <img src={r.image_url} alt={r.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover grayscale" />
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1">
                   <p className="truncate text-[10.5px] font-medium text-white">{r.name}</p>

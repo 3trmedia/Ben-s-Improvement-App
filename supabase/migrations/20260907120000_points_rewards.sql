@@ -9,7 +9,7 @@ alter table tasks add column if not exists points integer not null default 5;
 
 create table if not exists point_events (
   id uuid primary key default gen_random_uuid(),
-  source text not null check (source in ('task', 'habit', 'habit_streak', 'goal', 'workout_set', 'body_log', 'meal', 'walkaway', 'redemption')),
+  source text not null check (source in ('task', 'habit', 'habit_streak', 'goal', 'workout_set', 'body_log', 'meal', 'nutrition_adjust', 'walkaway', 'redemption')),
   source_id text,
   points integer not null,
   label text,
