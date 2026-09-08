@@ -9,12 +9,30 @@ alter table tasks add column if not exists points integer not null default 5;
 
 create table if not exists point_events (
   id uuid primary key default gen_random_uuid(),
-  source text not null check (source in ('task', 'habit', 'goal', 'workout_set', 'body_log', 'meal', 'walkaway', 'redemption')),
+  source text not null check (source in ('task', 'habit', 'habit_streak', 'goal', 'workout_set', 'body_log', 'meal', 'walkaway', 'redemption')),
   source_id text,
   points integer not null,
   label text,
   created_at timestamptz not null default now()
 );
+
+-- Per-day, per-habit completion record, separate from habits.done_this_week
+-- (which is a weekly quota counter, not a daily log). Used only to compute
+-- the "N consecutive days with every habit done" streak bonus below.
+create table if not exists habit_checkins (
+  habit_id uuid not null references habits(id) on delete cascade,
+  checked_on date not null,
+  primary key (habit_id, checked_on)
+);
+
+-- The streak check queries "which habits were checked in on this day"
+-- (checked_on alone), which is the second column of the PK above and so
+-- wouldn't be served by it -- add the index that pattern actually needs.
+create index if not exists habit_checkins_checked_on_idx on habit_checkins (checked_on);
+
+-- Existence checks for "has this source/source_id already been awarded"
+-- (goal completion, habit streak bonus) filter on both columns together.
+create index if not exists point_events_source_idx on point_events (source, source_id);
 
 create table if not exists rewards (
   id uuid primary key default gen_random_uuid(),
@@ -30,7 +48,7 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['point_events', 'rewards']
+  foreach t in array array['point_events', 'rewards', 'habit_checkins']
   loop
     execute format('alter table %I enable row level security', t);
     execute format(

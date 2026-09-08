@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PageHeader, Section, Card, ConfirmModal } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import { getPointBalance } from "@/lib/points";
+import { getPointBalance, revokeExactPoints } from "@/lib/points";
 
 type Reward = { id: string; name: string; image_url: string | null; cost: number; archived: boolean; starred: boolean };
 type Activity = { id: string; source: string; points: number; label: string | null; created_at: string };
@@ -82,6 +82,12 @@ export default function RewardsPage() {
       label: `Redeemed: ${reward.name}`,
     });
     await supabase.from("rewards").update({ archived: true }).eq("id", reward.id);
+    refresh();
+  };
+
+  const undoRedeem = async (reward: Reward) => {
+    await revokeExactPoints("redemption", reward.id);
+    await supabase.from("rewards").update({ archived: false }).eq("id", reward.id);
     refresh();
   };
 
@@ -214,7 +220,7 @@ export default function RewardsPage() {
         <Section title="Purchased">
           <div className="grid grid-cols-3 gap-2.5">
             {purchased.map((r) => (
-              <div key={r.id} className="relative aspect-square overflow-hidden rounded-lg border border-line opacity-50">
+              <div key={r.id} className="group relative aspect-square overflow-hidden rounded-lg border border-line opacity-60">
                 {r.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={r.image_url} alt={r.name} className="absolute inset-0 h-full w-full object-cover grayscale" />
@@ -222,6 +228,12 @@ export default function RewardsPage() {
                 <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1">
                   <p className="truncate text-[10.5px] font-medium text-white">{r.name}</p>
                 </div>
+                <button
+                  onClick={() => undoRedeem(r)}
+                  className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-white"
+                >
+                  Undo
+                </button>
               </div>
             ))}
           </div>

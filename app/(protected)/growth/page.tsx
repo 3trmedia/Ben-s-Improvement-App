@@ -15,7 +15,15 @@ import {
 } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
-import { awardPoints, revokeLatestPoints, HABIT_POINTS, GOAL_POINTS, WALKAWAY_POINTS } from "@/lib/points";
+import {
+  awardPoints,
+  revokeLatestPoints,
+  setHabitCheckin,
+  syncHabitStreakBonus,
+  HABIT_POINTS,
+  GOAL_POINTS,
+  WALKAWAY_POINTS,
+} from "@/lib/points";
 import type { Entity } from "@/lib/mock-data";
 
 const STATUS_TONE: Record<string, "accent" | "warm" | "neutral"> = {
@@ -48,6 +56,15 @@ type Task = {
 };
 
 const TASK_POINT_OPTIONS = [5, 50, 100] as const;
+
+// Local calendar day (no shifted cutoff, unlike Fitness's 4am gymDay/
+// Calories' 2am nutritionDay) -- habits weren't given a stated boundary.
+function habitDay(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 type Habit = {
   id: string;
@@ -238,8 +255,18 @@ export default function GrowthPage() {
     setHabits(updated);
     cacheSet("habits", updated);
     await writeOrQueue({ table: "habits", op: "update", payload: { done_this_week: next }, match: { id: habit.id } });
-    if (!wasFull) await awardPoints("habit", habit.id, HABIT_POINTS, habit.label);
-    else await revokeLatestPoints("habit", habit.id);
+
+    const today = habitDay();
+    if (!wasFull) {
+      await awardPoints("habit", habit.id, HABIT_POINTS, habit.label);
+      await setHabitCheckin(habit.id, today, true);
+    } else {
+      await revokeLatestPoints("habit", habit.id);
+      await setHabitCheckin(habit.id, today, false);
+    }
+    // Recompute regardless of direction -- completing today's last habit
+    // pays the streak bonus, undoing one that already qualified claws it back.
+    await syncHabitStreakBonus(updated.map((h) => h.id), today);
   };
 
   const changeTab = (next: "todo" | "habits" | "goals") => {
