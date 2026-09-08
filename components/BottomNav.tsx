@@ -8,6 +8,7 @@ const TABS = [
   { href: "/growth", label: "Growth", icon: IconTodo },
   { href: "/calories", label: "Calories", icon: IconCalories },
   { href: "/fitness", label: "Fitness", icon: IconFitness },
+  { href: "/rewards", label: "Rewards", icon: IconRewards },
 ] as const;
 
 export default function BottomNav() {
@@ -15,7 +16,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md border-t border-line bg-surface/95 backdrop-blur">
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
@@ -74,6 +75,28 @@ function IconCalories({ className }: IconProps) {
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" className={className}>
       <path
         d="M12 3.5c1.2 2 .3 3.1-.6 4.2-1 1.2-1.9 2.4-1.9 4.1a4.5 4.5 0 0 0 9 0c0-1.6-.7-2.7-1.5-3.6.2 1.2-.2 2-1 2.4.3-2.4-1-4.3-4-7.1Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconRewards({ className, filled }: IconProps) {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="3.5" y="9.5" width="17" height="10.5" rx="1.8" stroke="currentColor" strokeWidth="1.7" fill={filled ? "currentColor" : "none"} fillOpacity={filled ? 0.15 : 0} />
+      <path d="M3.5 13.2H20.5" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M12 9.5V20" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M12 9.5c-.9-2.6-2.6-4-4.2-4-1.3 0-2.3.9-2.3 2s1 2 2.3 2h4.2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 9.5c.9-2.6 2.6-4 4.2-4 1.3 0 2.3.9 2.3 2s-1 2-2.3 2H12Z"
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinejoin="round"

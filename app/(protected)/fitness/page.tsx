@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Section, Card, Segmented, Pill } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
+import { awardPoints, WORKOUT_SET_POINTS, BODY_LOG_POINTS } from "@/lib/points";
 
 type Exercise = {
   id: string;
@@ -200,6 +201,7 @@ export default function FitnessPage() {
   const saveSets = async (exerciseId: string) => {
     const draftSets = drafts[exerciseId] ?? [];
     const existing = loggedToday[exerciseId] ?? [];
+    const exerciseName = workouts.flatMap((w) => w.exercises).find((e) => e.id === exerciseId)?.name;
     const results: WorkoutLog[] = [];
     for (let i = 0; i < SET_COUNT; i++) {
       const d = draftSets[i];
@@ -225,6 +227,8 @@ export default function FitnessPage() {
         };
         results.push(row);
         await writeOrQueue({ table: "workout_logs", op: "insert", payload: row });
+        // Only newly-logged sets earn points, not corrections to existing ones.
+        await awardPoints("workout_set", row.id ?? null, WORKOUT_SET_POINTS, exerciseName ?? "Workout set");
       }
     }
     if (results.length) {
@@ -250,6 +254,7 @@ export default function FitnessPage() {
     setWeightInput("");
     setNoteInput("");
     await writeOrQueue({ table: "body_log", op: "insert", payload: entry });
+    await awardPoints("body_log", entry.id, BODY_LOG_POINTS, "Body log entry");
   };
 
   if (loading || !day) {

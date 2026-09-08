@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Section, Card, Ring, QuickAdjust } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { awardPoints, revokeLatestPoints, MEAL_POINTS } from "@/lib/points";
 import { peptideLog as seedPeptides } from "@/lib/mock-data";
 
 const NUTRITION_TARGETS = { calories: 2400, protein: 175, waterOz: 100 };
@@ -92,12 +93,16 @@ export default function CaloriesPage() {
       .insert({ name, calories, protein, logged_on: today })
       .select()
       .single();
-    if (data) setMeals((prev) => [...prev, data as Meal]);
+    if (data) {
+      setMeals((prev) => [...prev, data as Meal]);
+      await awardPoints("meal", (data as Meal).id, MEAL_POINTS, name);
+    }
   };
 
   const removeMeal = async (id: string) => {
     setMeals((prev) => prev.filter((m) => m.id !== id));
     await supabase.from("meals_log").delete().eq("id", id);
+    await revokeLatestPoints("meal", id);
   };
 
   const addCustomMeal = () => {

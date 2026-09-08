@@ -15,6 +15,7 @@ import {
 } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
+import { awardPoints, revokeLatestPoints, HABIT_POINTS, GOAL_POINTS, WALKAWAY_POINTS } from "@/lib/points";
 import type { Entity } from "@/lib/mock-data";
 
 const STATUS_TONE: Record<string, "accent" | "warm" | "neutral"> = {
@@ -43,7 +44,10 @@ type Task = {
   priority: "low" | "medium" | "high";
   due: string;
   done: boolean;
+  points: number;
 };
+
+const TASK_POINT_OPTIONS = [5, 50, 100] as const;
 
 type Habit = {
   id: string;
@@ -67,6 +71,30 @@ type Goal = {
 type ProjectPhase = { id: string; name: string; status: string; sort_order: number };
 type Project = { id: string; title: string; note: string | null; project_phases: ProjectPhase[] };
 
+// Goal completion is a one-time 50pt award, not tied to a checkbox -- checks
+// each goal's current/target (same logic the render uses, including the
+// habit-linked case) against whatever's already been awarded, so a goal that
+// crosses its target only ever pays out once, and re-crossing later (e.g. a
+// habit-linked goal after its weekly count resets) doesn't re-pay it.
+async function awardNewlyCompletedGoals(goalsData: Goal[], habitsData: Habit[]) {
+  const supabase = createClient();
+  for (const g of goalsData) {
+    let current = g.current_value;
+    let target = g.target_value;
+    if (g.metric_kind === "habit" && g.habit_id) {
+      const h = habitsData.find((x) => x.id === g.habit_id);
+      if (h) {
+        current = h.done_this_week;
+        target = h.target_per_week;
+      }
+    }
+    if (target > 0 && current >= target) {
+      const { data } = await supabase.from("point_events").select("id").eq("source", "goal").eq("source_id", g.id).limit(1);
+      if (!data?.length) await awardPoints("goal", g.id, GOAL_POINTS, g.title);
+    }
+  }
+}
+
 export default function GrowthPage() {
   const supabase = createClient();
   const [tab, setTab] = useState<"todo" | "habits" | "goals">("todo");
@@ -80,6 +108,7 @@ export default function GrowthPage() {
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskEntity, setNewTaskEntity] = useState<Entity>("Personal");
+  const [newTaskPoints, setNewTaskPoints] = useState<(typeof TASK_POINT_OPTIONS)[number]>(5);
 
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -138,8 +167,12 @@ export default function GrowthPage() {
         cacheSet("habits", habitsRes.data);
       }
       if (goalsRes.data) {
-        setGoals(goalsRes.data as Goal[]);
-        cacheSet("goals", goalsRes.data);
+        const goalsData = goalsRes.data as Goal[];
+        setGoals(goalsData);
+        cacheSet("goals", goalsData);
+        if (habitsRes.data) {
+          awardNewlyCompletedGoals(goalsData, habitsRes.data as Habit[]);
+        }
       }
       if (projectsRes.data) {
         const sorted = (projectsRes.data as Project[]).map((p) => ({
@@ -164,6 +197,7 @@ export default function GrowthPage() {
     setWalkAwayCount(next);
     cacheSet("walkawayCount", next);
     await writeOrQueue({ table: "walkaways", op: "insert", payload: { id: crypto.randomUUID() } });
+    await awardPoints("walkaway", null, WALKAWAY_POINTS, "Chose Something Better");
   };
 
   const toggleTask = async (task: Task) => {
@@ -172,6 +206,8 @@ export default function GrowthPage() {
     setTasks(updated);
     cacheSet("tasks", updated);
     await writeOrQueue({ table: "tasks", op: "update", payload: { done }, match: { id: task.id } });
+    if (done) await awardPoints("task", task.id, task.points, task.title);
+    else await revokeLatestPoints("task", task.id);
   };
 
   const addTask = async () => {
@@ -184,6 +220,7 @@ export default function GrowthPage() {
       priority: "medium",
       due: "Today",
       done: false,
+      points: newTaskPoints,
     };
     const updated = [...tasks, newTask];
     setTasks(updated);
@@ -201,6 +238,8 @@ export default function GrowthPage() {
     setHabits(updated);
     cacheSet("habits", updated);
     await writeOrQueue({ table: "habits", op: "update", payload: { done_this_week: next }, match: { id: habit.id } });
+    if (!wasFull) await awardPoints("habit", habit.id, HABIT_POINTS, habit.label);
+    else await revokeLatestPoints("habit", habit.id);
   };
 
   const changeTab = (next: "todo" | "habits" | "goals") => {
@@ -306,6 +345,13 @@ export default function GrowthPage() {
                   ]}
                 />
               </div>
+              <div className="mt-2.5">
+                <Segmented
+                  value={String(newTaskPoints)}
+                  onChange={(v) => setNewTaskPoints(Number(v) as (typeof TASK_POINT_OPTIONS)[number])}
+                  options={TASK_POINT_OPTIONS.map((p) => ({ value: String(p), label: `${p} pts` }))}
+                />
+              </div>
             </Card>
           </Section>
 
@@ -342,6 +388,7 @@ export default function GrowthPage() {
                           <div className="mt-2 flex gap-1.5">
                             <Pill tone={ENTITY_PILL_TONE[t.entity]}>{t.entity}</Pill>
                             <Pill tone={t.priority === "high" ? "danger" : "neutral"}>{t.priority}</Pill>
+                            <Pill tone="accent">{t.points} pts</Pill>
                           </div>
                         </div>
                       </div>
