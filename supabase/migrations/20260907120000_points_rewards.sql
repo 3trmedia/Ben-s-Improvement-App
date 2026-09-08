@@ -22,6 +22,7 @@ create table if not exists rewards (
   image_url text,
   cost integer not null,
   archived boolean not null default false,
+  starred boolean not null default false,
   created_at timestamptz not null default now()
 );
 

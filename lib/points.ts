@@ -10,7 +10,7 @@ export type PointSource =
   | "walkaway"
   | "redemption";
 
-export const HABIT_POINTS = 3;
+export const HABIT_POINTS = 5;
 export const GOAL_POINTS = 50;
 export const WORKOUT_SET_POINTS = 1;
 export const BODY_LOG_POINTS = 2;

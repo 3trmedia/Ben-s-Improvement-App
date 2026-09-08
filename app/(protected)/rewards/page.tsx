@@ -5,8 +5,15 @@ import { PageHeader, Section, Card, ConfirmModal } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { getPointBalance } from "@/lib/points";
 
-type Reward = { id: string; name: string; image_url: string | null; cost: number; archived: boolean };
+type Reward = { id: string; name: string; image_url: string | null; cost: number; archived: boolean; starred: boolean };
 type Activity = { id: string; source: string; points: number; label: string | null; created_at: string };
+
+function sortRewards(list: Reward[]) {
+  return [...list].sort((a, b) => {
+    if (a.starred !== b.starred) return a.starred ? -1 : 1;
+    return a.cost - b.cost;
+  });
+}
 
 export default function RewardsPage() {
   const supabase = createClient();
@@ -60,6 +67,12 @@ export default function RewardsPage() {
     refresh();
   };
 
+  const toggleStar = async (reward: Reward) => {
+    const starred = !reward.starred;
+    setRewards((prev) => sortRewards(prev.map((r) => (r.id === reward.id ? { ...r, starred } : r))));
+    await supabase.from("rewards").update({ starred }).eq("id", reward.id);
+  };
+
   const redeem = async (reward: Reward) => {
     if (balance < reward.cost) return;
     await supabase.from("point_events").insert({
@@ -82,7 +95,7 @@ export default function RewardsPage() {
     return <PageHeader eyebrow="Earn" title="Rewards" subtitle="Loading…" />;
   }
 
-  const active = rewards.filter((r) => !r.archived);
+  const active = sortRewards(rewards.filter((r) => !r.archived));
   const purchased = rewards.filter((r) => r.archived);
 
   return (
@@ -133,49 +146,83 @@ export default function RewardsPage() {
       </Section>
 
       <Section title="Save up for">
-        <div className="flex flex-col gap-2.5">
-          {active.length === 0 && <p className="text-[13px] text-ink-soft">No rewards yet — add one above.</p>}
-          {active.map((r) => (
-            <Card key={r.id} accent="none">
-              <div className="flex items-center gap-3">
-                {r.image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.image_url} alt={r.name} className="h-14 w-14 rounded-lg object-cover" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14.5px] font-medium">{r.name}</p>
-                  <p className="font-mono text-[12.5px] tabular-nums text-ink-soft">{r.cost} pts</p>
+        {active.length === 0 ? (
+          <p className="text-[13px] text-ink-soft">No rewards yet — add one above.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {active.map((r) => {
+              const affordable = balance >= r.cost;
+              const pct = Math.min(100, Math.round((balance / r.cost) * 100));
+              return (
+                <div key={r.id} className="relative aspect-square overflow-hidden rounded-xl border border-line bg-surface">
+                  {r.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.image_url} alt={r.name} className="absolute inset-0 h-full w-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-bg text-[12px] text-ink-soft">
+                      No image
+                    </div>
+                  )}
+
+                  <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2">
+                    <button
+                      onClick={() => setDeleteTarget(r)}
+                      aria-label="Delete"
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-[11px] text-white"
+                    >
+                      ✕
+                    </button>
+                    <button
+                      onClick={() => toggleStar(r)}
+                      aria-label={r.starred ? "Unstar" : "Star — move to top"}
+                      className={`flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-[15px] ${
+                        r.starred ? "text-warm" : "text-white/80"
+                      }`}
+                    >
+                      {r.starred ? "★" : "☆"}
+                    </button>
+                  </div>
+
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2.5 pt-6">
+                    <p className="truncate text-[12.5px] font-medium text-white">{r.name}</p>
+                    <div className="mt-1 flex items-center justify-between gap-1.5">
+                      <span className="rounded-full bg-white/90 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-ink">
+                        {r.cost} pts
+                      </span>
+                      <button
+                        onClick={() => redeem(r)}
+                        disabled={!affordable}
+                        className="rounded-full bg-accent px-2.5 py-1 text-[11px] font-medium text-surface disabled:bg-white/20 disabled:text-white/60"
+                      >
+                        {affordable ? "Redeem" : `${r.cost - balance} to go`}
+                      </button>
+                    </div>
+                    {!affordable && (
+                      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/20">
+                        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={() => redeem(r)}
-                  disabled={balance < r.cost}
-                  className="rounded-lg bg-accent px-3 py-2 text-[12.5px] font-medium text-surface disabled:opacity-40"
-                >
-                  Redeem
-                </button>
-                <button onClick={() => setDeleteTarget(r)} aria-label="Delete" className="text-[13px] text-ink-soft">
-                  ✕
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Section>
 
       {purchased.length > 0 && (
         <Section title="Purchased">
-          <div className="flex flex-col gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5">
             {purchased.map((r) => (
-              <Card key={r.id} accent="none" className="flex items-center gap-3 opacity-60">
+              <div key={r.id} className="relative aspect-square overflow-hidden rounded-lg border border-line opacity-50">
                 {r.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.image_url} alt={r.name} className="h-12 w-12 rounded-lg object-cover" />
+                  <img src={r.image_url} alt={r.name} className="absolute inset-0 h-full w-full object-cover grayscale" />
                 )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium line-through">{r.name}</p>
-                  <p className="font-mono text-[12px] tabular-nums text-ink-soft">{r.cost} pts</p>
+                <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1.5 py-1">
+                  <p className="truncate text-[10.5px] font-medium text-white">{r.name}</p>
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
         </Section>
