@@ -8,6 +8,7 @@ export type PointSource =
   | "workout_set"
   | "body_log"
   | "meal"
+  | "nutrition_adjust"
   | "walkaway"
   | "redemption";
 
@@ -16,6 +17,7 @@ export const GOAL_POINTS = 50;
 export const WORKOUT_SET_POINTS = 1;
 export const BODY_LOG_POINTS = 2;
 export const MEAL_POINTS = 1;
+export const NUTRITION_ADJUST_POINTS = 1;
 export const WALKAWAY_POINTS = 5;
 export const HABIT_STREAK_LENGTH = 5;
 export const HABIT_STREAK_BONUS = 250;
@@ -57,6 +59,14 @@ export async function getPointBalance(): Promise<number> {
   const supabase = createClient();
   const { data } = await supabase.rpc("point_balance");
   return typeof data === "number" ? data : 0;
+}
+
+// Sum of points earned since a given instant -- used to show a live
+// "points today" figure without waiting on the whole-history point_balance().
+export async function getPointsSince(isoTimestamp: string): Promise<number> {
+  const supabase = createClient();
+  const { data } = await supabase.from("point_events").select("points").gte("created_at", isoTimestamp);
+  return (data ?? []).reduce((sum, r) => sum + (r.points as number), 0);
 }
 
 // Marks (or unmarks) a single habit as done for a specific calendar day.

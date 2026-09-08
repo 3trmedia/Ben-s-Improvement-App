@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Section, Card, Ring, QuickAdjust } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import { awardPoints, revokeLatestPoints, MEAL_POINTS } from "@/lib/points";
+import { awardPoints, revokeLatestPoints, getPointsSince, MEAL_POINTS, NUTRITION_ADJUST_POINTS } from "@/lib/points";
 import { peptideLog as seedPeptides } from "@/lib/mock-data";
 
 const NUTRITION_TARGETS = { calories: 2400, protein: 175, waterOz: 100 };
@@ -26,6 +26,15 @@ function nutritionDay(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+// The actual instant "today" rolls over at, matching nutritionDay()'s 2am
+// shift -- used to sum today's points without waiting on the whole ledger.
+function dayBoundary(d = new Date()) {
+  const boundary = new Date(d);
+  boundary.setHours(2, 0, 0, 0);
+  if (d < boundary) boundary.setDate(boundary.getDate() - 1);
+  return boundary;
+}
+
 export default function CaloriesPage() {
   const supabase = createClient();
   const today = nutritionDay();
@@ -35,6 +44,7 @@ export default function CaloriesPage() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [peptides, setPeptides] = useState(seedPeptides);
+  const [pointsToday, setPointsToday] = useState(0);
 
   const [query, setQuery] = useState("");
   const [browseOpen, setBrowseOpen] = useState(false);
@@ -52,14 +62,16 @@ export default function CaloriesPage() {
 
   useEffect(() => {
     async function load() {
-      const [recipesRes, mealsRes, adjRes] = await Promise.all([
+      const [recipesRes, mealsRes, adjRes, points] = await Promise.all([
         supabase.from("recipes").select("*").order("name"),
         supabase.from("meals_log").select("*").eq("logged_on", today).order("created_at"),
         supabase.from("nutrition_adjustments").select("*").eq("logged_on", today),
+        getPointsSince(dayBoundary().toISOString()),
       ]);
       if (recipesRes.data) setRecipes(recipesRes.data as Recipe[]);
       if (mealsRes.data) setMeals(mealsRes.data as Meal[]);
       if (adjRes.data) setAdjustments(adjRes.data as Adjustment[]);
+      setPointsToday(points);
       setLoading(false);
     }
     load();
@@ -75,34 +87,39 @@ export default function CaloriesPage() {
 
   // Decrements are clamped to the current total so it can't go negative
   // "in debt" — otherwise a later "+" would silently be absorbed paying
-  // that debt down instead of visibly increasing the ring.
-  const adjust = async (metric: Adjustment["metric"], delta: number, current: number) => {
+  // that debt down instead of visibly increasing the ring. Optimistic:
+  // local state (ring + points-today) updates immediately with a
+  // client-generated id; the write and point event fire in the background.
+  const adjust = (metric: Adjustment["metric"], delta: number, current: number) => {
     const amount = delta < 0 ? -Math.min(Math.abs(delta), current) : delta;
     if (amount === 0) return;
-    const { data } = await supabase
-      .from("nutrition_adjustments")
-      .insert({ metric, amount, logged_on: today })
-      .select()
-      .single();
-    if (data) setAdjustments((prev) => [...prev, data as Adjustment]);
+    const row: Adjustment = { id: crypto.randomUUID(), metric, amount };
+    setAdjustments((prev) => [...prev, row]);
+    setPointsToday((p) => p + (amount > 0 ? NUTRITION_ADJUST_POINTS : -NUTRITION_ADJUST_POINTS));
+    (async () => {
+      await supabase.from("nutrition_adjustments").insert({ id: row.id, metric, amount, logged_on: today });
+      if (amount > 0) await awardPoints("nutrition_adjust", metric, NUTRITION_ADJUST_POINTS, `${metric} logged`);
+      else await revokeLatestPoints("nutrition_adjust", metric);
+    })();
   };
 
-  const logMeal = async (name: string, calories: number, protein: number) => {
-    const { data } = await supabase
-      .from("meals_log")
-      .insert({ name, calories, protein, logged_on: today })
-      .select()
-      .single();
-    if (data) {
-      setMeals((prev) => [...prev, data as Meal]);
-      await awardPoints("meal", (data as Meal).id, MEAL_POINTS, name);
-    }
+  const logMeal = (name: string, calories: number, protein: number) => {
+    const meal: Meal = { id: crypto.randomUUID(), name, calories, protein, created_at: new Date().toISOString() };
+    setMeals((prev) => [...prev, meal]);
+    setPointsToday((p) => p + MEAL_POINTS);
+    (async () => {
+      await supabase.from("meals_log").insert({ id: meal.id, name, calories, protein, logged_on: today });
+      await awardPoints("meal", meal.id, MEAL_POINTS, name);
+    })();
   };
 
-  const removeMeal = async (id: string) => {
+  const removeMeal = (id: string) => {
     setMeals((prev) => prev.filter((m) => m.id !== id));
-    await supabase.from("meals_log").delete().eq("id", id);
-    await revokeLatestPoints("meal", id);
+    setPointsToday((p) => p - MEAL_POINTS);
+    (async () => {
+      await supabase.from("meals_log").delete().eq("id", id);
+      await revokeLatestPoints("meal", id);
+    })();
   };
 
   const addCustomMeal = () => {
@@ -159,7 +176,14 @@ export default function CaloriesPage() {
     <>
       <PageHeader eyebrow="Nutrition" title="Calories" subtitle="Meals, water, and peptides — logged, not guessed." />
 
-      <Section title="Today">
+      <Section
+        title="Today"
+        action={
+          <span className="rounded-full bg-accent-soft px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums text-accent">
+            +{pointsToday} pts today
+          </span>
+        }
+      >
         <div className="flex justify-around">
           <Ring value={totalCalories} target={NUTRITION_TARGETS.calories} label="Calories" unit="" tone="accent" />
           <Ring value={totalProtein} target={NUTRITION_TARGETS.protein} label="Protein" unit="g" tone="danger" />
