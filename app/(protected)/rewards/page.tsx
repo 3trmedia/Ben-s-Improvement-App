@@ -192,7 +192,7 @@ export default function RewardsPage() {
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2.5 pt-6">
                     <p className="truncate text-[12.5px] font-medium text-white">{r.name}</p>
                     <div className="mt-1 flex items-center justify-between gap-1.5">
-                      <span className="rounded-full bg-white/90 px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-ink">
+                      <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-surface">
                         {r.cost} pts
                       </span>
                       <button
