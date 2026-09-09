@@ -139,6 +139,16 @@ export default function GrowthPage() {
   const [newTaskEntity, setNewTaskEntity] = useState<Entity>("Personal");
   const [newTaskPoints, setNewTaskPoints] = useState<(typeof TASK_POINT_OPTIONS)[number]>(5);
 
+  const [newHabitLabel, setNewHabitLabel] = useState("");
+  const [newHabitDays, setNewHabitDays] = useState<7 | 5 | 3 | 1>(7);
+
+  const [newGoalTitle, setNewGoalTitle] = useState("");
+  const [newGoalNote, setNewGoalNote] = useState("");
+  const [newGoalKind, setNewGoalKind] = useState<"count" | "habit">("count");
+  const [newGoalTarget, setNewGoalTarget] = useState("");
+  const [newGoalUnit, setNewGoalUnit] = useState("");
+  const [newGoalHabitId, setNewGoalHabitId] = useState("");
+
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -256,6 +266,44 @@ export default function GrowthPage() {
     cacheSet("tasks", updated);
     setNewTaskTitle("");
     await writeOrQueue({ table: "tasks", op: "insert", payload: newTask });
+  };
+
+  const addHabit = async () => {
+    if (!newHabitLabel.trim()) return;
+    const habit: Habit = {
+      id: crypto.randomUUID(),
+      label: newHabitLabel.trim(),
+      cadence: newHabitDays === 7 ? "Daily" : `${newHabitDays}x/week`,
+      target_per_week: newHabitDays,
+      done_this_week: 0,
+    };
+    const updated = [...habits, habit];
+    setHabits(updated);
+    cacheSet("habits", updated);
+    setNewHabitLabel("");
+    await writeOrQueue({ table: "habits", op: "insert", payload: { ...habit, sort_order: habits.length } });
+  };
+
+  const addGoal = async () => {
+    if (!newGoalTitle.trim()) return;
+    if (newGoalKind === "habit" && !newGoalHabitId) return;
+    const goal: Goal = {
+      id: crypto.randomUUID(),
+      title: newGoalTitle.trim(),
+      note: newGoalNote.trim() || null,
+      metric_kind: newGoalKind,
+      current_value: 0,
+      target_value: newGoalKind === "count" ? Number(newGoalTarget) || 1 : 1,
+      unit: newGoalKind === "count" ? newGoalUnit.trim() || null : null,
+      habit_id: newGoalKind === "habit" ? newGoalHabitId : null,
+    };
+    setGoals((prev) => [...prev, goal]);
+    setNewGoalTitle("");
+    setNewGoalNote("");
+    setNewGoalTarget("");
+    setNewGoalUnit("");
+    setNewGoalHabitId("");
+    await supabase.from("goals").insert(goal);
   };
 
   const toggleHabitToday = async (habit: Habit) => {
@@ -441,7 +489,37 @@ export default function GrowthPage() {
       )}
 
       {tab === "habits" && (
-        <Section title="Check-off, not streak-guilt">
+        <>
+          <Section title="Add a habit">
+            <Card accent="none">
+              <div className="flex gap-2">
+                <input
+                  value={newHabitLabel}
+                  onChange={(e) => setNewHabitLabel(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addHabit()}
+                  placeholder="What habit are you building?"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-[14px] outline-none placeholder:text-ink-soft focus:border-accent"
+                />
+                <button onClick={addHabit} className="rounded-lg bg-accent px-3.5 py-2 text-[13px] font-medium text-surface">
+                  Add
+                </button>
+              </div>
+              <div className="mt-2.5">
+                <Segmented
+                  value={String(newHabitDays)}
+                  onChange={(v) => setNewHabitDays(Number(v) as 7 | 5 | 3 | 1)}
+                  options={[
+                    { value: "7", label: "Daily" },
+                    { value: "5", label: "5x/week" },
+                    { value: "3", label: "3x/week" },
+                    { value: "1", label: "1x/week" },
+                  ]}
+                />
+              </div>
+            </Card>
+          </Section>
+
+          <Section title="Check-off, not streak-guilt">
           <div className="flex flex-col gap-2.5">
             {habits.map((h) => (
               <SelectableCard
@@ -472,12 +550,73 @@ export default function GrowthPage() {
                 </div>
               </SelectableCard>
             ))}
-          </div>
-        </Section>
+            </div>
+          </Section>
+        </>
       )}
 
       {tab === "goals" && (
         <>
+          <Section title="Add a goal">
+            <Card accent="none">
+              <div className="flex flex-col gap-2">
+                <input
+                  value={newGoalTitle}
+                  onChange={(e) => setNewGoalTitle(e.target.value)}
+                  placeholder="What are you trying to accomplish?"
+                  className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-[14px] outline-none placeholder:text-ink-soft focus:border-accent"
+                />
+                <input
+                  value={newGoalNote}
+                  onChange={(e) => setNewGoalNote(e.target.value)}
+                  placeholder="Note (optional)"
+                  className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-[14px] outline-none placeholder:text-ink-soft focus:border-accent"
+                />
+                <Segmented
+                  value={newGoalKind}
+                  onChange={setNewGoalKind}
+                  options={[
+                    { value: "count", label: "Count toward a number" },
+                    { value: "habit", label: "Tied to a habit" },
+                  ]}
+                />
+                {newGoalKind === "count" ? (
+                  <div className="flex gap-2">
+                    <input
+                      value={newGoalTarget}
+                      onChange={(e) => setNewGoalTarget(e.target.value)}
+                      placeholder="Target"
+                      inputMode="numeric"
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-[14px] outline-none placeholder:text-ink-soft focus:border-accent"
+                    />
+                    <input
+                      value={newGoalUnit}
+                      onChange={(e) => setNewGoalUnit(e.target.value)}
+                      placeholder="Unit (optional)"
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-[14px] outline-none placeholder:text-ink-soft focus:border-accent"
+                    />
+                  </div>
+                ) : (
+                  <select
+                    value={newGoalHabitId}
+                    onChange={(e) => setNewGoalHabitId(e.target.value)}
+                    className="w-full rounded-lg border border-line bg-bg px-3 py-2 text-[14px] outline-none focus:border-accent"
+                  >
+                    <option value="">Pick a habit…</option>
+                    {habits.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button onClick={addGoal} className="rounded-lg bg-accent py-2 text-[13px] font-medium text-surface">
+                  Add goal
+                </button>
+              </div>
+            </Card>
+          </Section>
+
           <Section title="This quarter">
             <div className="flex flex-col gap-2.5">
               {goals.map((g) => {
