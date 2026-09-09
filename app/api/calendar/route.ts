@@ -21,30 +21,60 @@ function toTimeLabel(d: Date) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+// Multiple private iCal feeds, comma-separated, blended into one event
+// stream (GOOGLE_CALENDAR_ICS_URLS). GOOGLE_CALENDAR_ICS_URL (singular) is
+// still honored for backward compatibility and simply gets folded in too.
+function calendarUrls(): string[] {
+  const list = (process.env.GOOGLE_CALENDAR_ICS_URLS ?? "")
+    .split(",")
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const single = process.env.GOOGLE_CALENDAR_ICS_URL?.trim();
+  if (single && !list.includes(single)) list.push(single);
+  return list;
+}
+
 export async function GET() {
-  const url = process.env.GOOGLE_CALENDAR_ICS_URL;
-  if (!url) {
+  const urls = calendarUrls();
+  if (urls.length === 0) {
     return NextResponse.json({ events: [] as CalendarApiEvent[] });
   }
 
   try {
-    const data = await ical.async.fromURL(url);
-    const events: CalendarApiEvent[] = Object.values(data)
-      .filter((item): item is VEvent => item?.type === "VEVENT" && !!(item as VEvent).start)
-      .map((e) => {
-        const start = e.start as Date;
-        const end = (e.end as Date) ?? start;
-        const allDay = e.datetype === "date";
-        return {
-          id: e.uid,
-          date: toDateKey(start),
-          start: allDay ? "All day" : toTimeLabel(start),
-          end: allDay ? "" : toTimeLabel(end),
-          title: e.summary?.toString() ?? "Untitled",
-          location: e.location?.toString(),
-        };
-      });
+    const results = await Promise.allSettled(urls.map((url) => ical.async.fromURL(url)));
 
+    const events: CalendarApiEvent[] = [];
+    let anyFailed = false;
+    results.forEach((result, calendarIndex) => {
+      if (result.status === "rejected") {
+        console.error("Calendar fetch failed", urls[calendarIndex], result.reason);
+        anyFailed = true;
+        return;
+      }
+      Object.values(result.value)
+        .filter((item): item is VEvent => item?.type === "VEVENT" && !!(item as VEvent).start)
+        .forEach((e) => {
+          const start = e.start as Date;
+          const end = (e.end as Date) ?? start;
+          const allDay = e.datetype === "date";
+          events.push({
+            // Prefix with the calendar index -- the same event uid could
+            // theoretically repeat across two independent feeds.
+            id: `${calendarIndex}:${e.uid}`,
+            date: toDateKey(start),
+            start: allDay ? "All day" : toTimeLabel(start),
+            end: allDay ? "" : toTimeLabel(end),
+            title: e.summary?.toString() ?? "Untitled",
+            location: e.location?.toString(),
+          });
+        });
+    });
+
+    // Only surface an error if every calendar failed -- a blended view
+    // shouldn't go blank just because one of several feeds is down.
+    if (anyFailed && events.length === 0) {
+      return NextResponse.json({ events: [] as CalendarApiEvent[], error: "Failed to fetch calendar" }, { status: 502 });
+    }
     return NextResponse.json({ events });
   } catch (err) {
     console.error("Calendar fetch failed", err);
