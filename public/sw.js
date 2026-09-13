@@ -1,10 +1,18 @@
 // App-shell cache: network-first, cache fallback. Never intercepts /api/*
 // (calendar, health webhook) or cross-origin requests (Supabase) — those are
-// handled by the app's own IndexedDB cache/outbox instead. This only caches
-// pages/assets actually visited; it doesn't proactively prefetch anything.
-const CACHE_NAME = "bens-app-shell-v1";
+// handled by the app's own IndexedDB cache/outbox instead.
+const CACHE_NAME = "bens-app-shell-v2";
 
-self.addEventListener("install", () => {
+// Precache every tab's shell up front so a page works offline even on its
+// very first visit, not only after having been opened once while online.
+const APP_ROUTES = ["/events", "/growth", "/calories", "/fitness", "/rewards"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(APP_ROUTES.map((route) => cache.add(route).catch(() => {})))
+    )
+  );
   self.skipWaiting();
 });
 

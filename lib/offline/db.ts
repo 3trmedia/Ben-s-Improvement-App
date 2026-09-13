@@ -3,7 +3,7 @@ import Dexie, { type Table } from "dexie";
 export type OutboxItem = {
   id?: number;
   table: string;
-  op: "insert" | "update";
+  op: "insert" | "update" | "delete";
   payload: Record<string, unknown>;
   match?: Record<string, unknown>;
   createdAt: number;

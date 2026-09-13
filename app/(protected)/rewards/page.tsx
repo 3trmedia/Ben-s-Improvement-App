@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PageHeader, Section, Card, ConfirmModal } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
 import { getPointBalance, revokeExactPoints } from "@/lib/points";
 
 type Reward = { id: string; name: string; image_url: string | null; cost: number; archived: boolean; starred: boolean };
@@ -96,14 +97,33 @@ export default function RewardsPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   const refresh = async () => {
+    if (!navigator.onLine) {
+      const [cBal, cRewards, cActivity] = await Promise.all([
+        cacheGet<number>("rewardsBalance"),
+        cacheGet<Reward[]>("rewardsList"),
+        cacheGet<Activity[]>("rewardsActivity"),
+      ]);
+      if (cBal != null) setBalance(cBal);
+      if (cRewards) setRewards(cRewards);
+      if (cActivity) setActivity(cActivity);
+      return;
+    }
+
     const [bal, rewardsRes, activityRes] = await Promise.all([
       getPointBalance(),
       supabase.from("rewards").select("*").order("cost"),
       supabase.from("point_events").select("*").order("created_at", { ascending: false }).limit(10),
     ]);
     setBalance(bal);
-    if (rewardsRes.data) setRewards(rewardsRes.data as Reward[]);
-    if (activityRes.data) setActivity(activityRes.data as Activity[]);
+    cacheSet("rewardsBalance", bal);
+    if (rewardsRes.data) {
+      setRewards(rewardsRes.data as Reward[]);
+      cacheSet("rewardsList", rewardsRes.data);
+    }
+    if (activityRes.data) {
+      setActivity(activityRes.data as Activity[]);
+      cacheSet("rewardsActivity", activityRes.data);
+    }
   };
 
   useEffect(() => {
@@ -116,7 +136,9 @@ export default function RewardsPage() {
     if (!name.trim() || !costNum) return;
     setUploading(true);
     let image_url: string | null = null;
-    if (file) {
+    // Image upload needs a live connection -- skip it outright when offline
+    // rather than let it hang, and still let the reward itself be created.
+    if (file && navigator.onLine) {
       const path = `${crypto.randomUUID()}-${file.name}`;
       const { error: uploadError } = await supabase.storage.from("reward-images").upload(path, file);
       if (!uploadError) {
@@ -124,9 +146,13 @@ export default function RewardsPage() {
       }
     }
     const id = crypto.randomUUID();
-    await supabase.from("rewards").insert({ id, name: name.trim(), cost: costNum, image_url });
-    // Append locally instead of re-fetching balance + all rewards + activity.
-    setRewards((prev) => [...prev, { id, name: name.trim(), cost: costNum, image_url, archived: false, starred: false }]);
+    const reward: Reward = { id, name: name.trim(), cost: costNum, image_url, archived: false, starred: false };
+    setRewards((prev) => {
+      const next = [...prev, reward];
+      cacheSet("rewardsList", next);
+      return next;
+    });
+    await writeOrQueue({ table: "rewards", op: "insert", payload: reward });
     setName("");
     setCost("");
     setFile(null);
@@ -135,39 +161,75 @@ export default function RewardsPage() {
     setAddOpen(false);
   };
 
-  const toggleStar = async (reward: Reward) => {
+  const toggleStar = (reward: Reward) => {
     const starred = !reward.starred;
-    setRewards((prev) => prev.map((r) => (r.id === reward.id ? { ...r, starred } : r)));
-    await supabase.from("rewards").update({ starred }).eq("id", reward.id);
+    setRewards((prev) => {
+      const next = prev.map((r) => (r.id === reward.id ? { ...r, starred } : r));
+      cacheSet("rewardsList", next);
+      return next;
+    });
+    writeOrQueue({ table: "rewards", op: "update", payload: { starred }, match: { id: reward.id } });
   };
 
   // Optimistic: balance, reward, and the activity feed update immediately;
-  // the two writes fire in the background instead of a 3-query refresh().
+  // the two writes fire in the background (queued if offline) instead of a
+  // 3-query refresh().
   const redeem = (reward: Reward) => {
     if (balance < reward.cost) return;
     const label = `Redeemed: ${reward.name}`;
-    setBalance((b) => b - reward.cost);
-    setRewards((prev) => prev.map((r) => (r.id === reward.id ? { ...r, archived: true } : r)));
-    setActivity((prev) => [{ id: crypto.randomUUID(), source: "redemption", points: -reward.cost, label, created_at: new Date().toISOString() }, ...prev].slice(0, 10));
+    setBalance((b) => {
+      const next = b - reward.cost;
+      cacheSet("rewardsBalance", next);
+      return next;
+    });
+    setRewards((prev) => {
+      const next = prev.map((r) => (r.id === reward.id ? { ...r, archived: true } : r));
+      cacheSet("rewardsList", next);
+      return next;
+    });
+    setActivity((prev) => {
+      const next = [
+        { id: crypto.randomUUID(), source: "redemption", points: -reward.cost, label, created_at: new Date().toISOString() },
+        ...prev,
+      ].slice(0, 10);
+      cacheSet("rewardsActivity", next);
+      return next;
+    });
     (async () => {
-      await supabase.from("point_events").insert({ source: "redemption", source_id: reward.id, points: -reward.cost, label });
-      await supabase.from("rewards").update({ archived: true }).eq("id", reward.id);
+      await writeOrQueue({
+        table: "point_events",
+        op: "insert",
+        payload: { source: "redemption", source_id: reward.id, points: -reward.cost, label },
+      });
+      await writeOrQueue({ table: "rewards", op: "update", payload: { archived: true }, match: { id: reward.id } });
     })();
   };
 
   const undoRedeem = (reward: Reward) => {
-    setBalance((b) => b + reward.cost);
-    setRewards((prev) => prev.map((r) => (r.id === reward.id ? { ...r, archived: false } : r)));
+    setBalance((b) => {
+      const next = b + reward.cost;
+      cacheSet("rewardsBalance", next);
+      return next;
+    });
+    setRewards((prev) => {
+      const next = prev.map((r) => (r.id === reward.id ? { ...r, archived: false } : r));
+      cacheSet("rewardsList", next);
+      return next;
+    });
     (async () => {
       await revokeExactPoints("redemption", reward.id);
-      await supabase.from("rewards").update({ archived: false }).eq("id", reward.id);
+      await writeOrQueue({ table: "rewards", op: "update", payload: { archived: false }, match: { id: reward.id } });
     })();
   };
 
   const deleteReward = async (reward: Reward) => {
     setDeleteTarget(null);
-    setRewards((prev) => prev.filter((r) => r.id !== reward.id));
-    await supabase.from("rewards").delete().eq("id", reward.id);
+    setRewards((prev) => {
+      const next = prev.filter((r) => r.id !== reward.id);
+      cacheSet("rewardsList", next);
+      return next;
+    });
+    await writeOrQueue({ table: "rewards", op: "delete", payload: {}, match: { id: reward.id } });
   };
 
   if (loading) {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Section, Card, Ring, QuickAdjust } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
 import { awardPoints, revokeLatestPoints, getPointsSince, MEAL_POINTS, NUTRITION_ADJUST_POINTS } from "@/lib/points";
 import { peptideLog as seedPeptides } from "@/lib/mock-data";
 
@@ -62,16 +63,41 @@ export default function CaloriesPage() {
 
   useEffect(() => {
     async function load() {
+      if (!navigator.onLine) {
+        const [cRecipes, cMeals, cAdj, cPoints] = await Promise.all([
+          cacheGet<Recipe[]>("recipes"),
+          cacheGet<Meal[]>(`meals-${today}`),
+          cacheGet<Adjustment[]>(`nutritionAdjustments-${today}`),
+          cacheGet<number>(`pointsToday-${today}`),
+        ]);
+        if (cRecipes) setRecipes(cRecipes);
+        if (cMeals) setMeals(cMeals);
+        if (cAdj) setAdjustments(cAdj);
+        if (cPoints) setPointsToday(cPoints);
+        setLoading(false);
+        return;
+      }
+
       const [recipesRes, mealsRes, adjRes, points] = await Promise.all([
         supabase.from("recipes").select("*").order("name"),
         supabase.from("meals_log").select("*").eq("logged_on", today).order("created_at"),
         supabase.from("nutrition_adjustments").select("*").eq("logged_on", today),
         getPointsSince(dayBoundary().toISOString()),
       ]);
-      if (recipesRes.data) setRecipes(recipesRes.data as Recipe[]);
-      if (mealsRes.data) setMeals(mealsRes.data as Meal[]);
-      if (adjRes.data) setAdjustments(adjRes.data as Adjustment[]);
+      if (recipesRes.data) {
+        setRecipes(recipesRes.data as Recipe[]);
+        cacheSet("recipes", recipesRes.data);
+      }
+      if (mealsRes.data) {
+        setMeals(mealsRes.data as Meal[]);
+        cacheSet(`meals-${today}`, mealsRes.data);
+      }
+      if (adjRes.data) {
+        setAdjustments(adjRes.data as Adjustment[]);
+        cacheSet(`nutritionAdjustments-${today}`, adjRes.data);
+      }
       setPointsToday(points);
+      cacheSet(`pointsToday-${today}`, points);
       setLoading(false);
     }
     load();
@@ -94,10 +120,18 @@ export default function CaloriesPage() {
     const amount = delta < 0 ? -Math.min(Math.abs(delta), current) : delta;
     if (amount === 0) return;
     const row: Adjustment = { id: crypto.randomUUID(), metric, amount };
-    setAdjustments((prev) => [...prev, row]);
-    setPointsToday((p) => p + (amount > 0 ? NUTRITION_ADJUST_POINTS : -NUTRITION_ADJUST_POINTS));
+    setAdjustments((prev) => {
+      const next = [...prev, row];
+      cacheSet(`nutritionAdjustments-${today}`, next);
+      return next;
+    });
+    setPointsToday((p) => {
+      const next = p + (amount > 0 ? NUTRITION_ADJUST_POINTS : -NUTRITION_ADJUST_POINTS);
+      cacheSet(`pointsToday-${today}`, next);
+      return next;
+    });
     (async () => {
-      await supabase.from("nutrition_adjustments").insert({ id: row.id, metric, amount, logged_on: today });
+      await writeOrQueue({ table: "nutrition_adjustments", op: "insert", payload: { id: row.id, metric, amount, logged_on: today } });
       if (amount > 0) await awardPoints("nutrition_adjust", metric, NUTRITION_ADJUST_POINTS, `${metric} logged`);
       else await revokeLatestPoints("nutrition_adjust", metric);
     })();
@@ -105,19 +139,35 @@ export default function CaloriesPage() {
 
   const logMeal = (name: string, calories: number, protein: number) => {
     const meal: Meal = { id: crypto.randomUUID(), name, calories, protein, created_at: new Date().toISOString() };
-    setMeals((prev) => [...prev, meal]);
-    setPointsToday((p) => p + MEAL_POINTS);
+    setMeals((prev) => {
+      const next = [...prev, meal];
+      cacheSet(`meals-${today}`, next);
+      return next;
+    });
+    setPointsToday((p) => {
+      const next = p + MEAL_POINTS;
+      cacheSet(`pointsToday-${today}`, next);
+      return next;
+    });
     (async () => {
-      await supabase.from("meals_log").insert({ id: meal.id, name, calories, protein, logged_on: today });
+      await writeOrQueue({ table: "meals_log", op: "insert", payload: { id: meal.id, name, calories, protein, logged_on: today } });
       await awardPoints("meal", meal.id, MEAL_POINTS, name);
     })();
   };
 
   const removeMeal = (id: string) => {
-    setMeals((prev) => prev.filter((m) => m.id !== id));
-    setPointsToday((p) => p - MEAL_POINTS);
+    setMeals((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      cacheSet(`meals-${today}`, next);
+      return next;
+    });
+    setPointsToday((p) => {
+      const next = p - MEAL_POINTS;
+      cacheSet(`pointsToday-${today}`, next);
+      return next;
+    });
     (async () => {
-      await supabase.from("meals_log").delete().eq("id", id);
+      await writeOrQueue({ table: "meals_log", op: "delete", payload: {}, match: { id } });
       await revokeLatestPoints("meal", id);
     })();
   };
@@ -132,19 +182,20 @@ export default function CaloriesPage() {
     setCustomProtein("");
   };
 
-  const saveRecipe = async () => {
+  const saveRecipe = () => {
     const cal = Number(recipeCal);
     const protein = Number(recipeProtein) || 0;
     if (!recipeName.trim() || !cal) return;
-    const { data } = await supabase
-      .from("recipes")
-      .insert({ name: recipeName.trim(), calories: cal, protein })
-      .select()
-      .single();
-    if (data) setRecipes((prev) => [...prev, data as Recipe].sort((a, b) => a.name.localeCompare(b.name)));
+    const recipe: Recipe = { id: crypto.randomUUID(), name: recipeName.trim(), calories: cal, protein };
+    setRecipes((prev) => {
+      const next = [...prev, recipe].sort((a, b) => a.name.localeCompare(b.name));
+      cacheSet("recipes", next);
+      return next;
+    });
     setRecipeName("");
     setRecipeCal("");
     setRecipeProtein("");
+    writeOrQueue({ table: "recipes", op: "insert", payload: recipe });
   };
 
   const addPeptide = () => {

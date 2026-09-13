@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { writeOrQueue } from "@/lib/offline/sync";
 
 export type PointSource =
   | "task"
@@ -22,9 +23,15 @@ export const WALKAWAY_POINTS = 5;
 export const HABIT_STREAK_LENGTH = 5;
 export const HABIT_STREAK_BONUS = 250;
 
+// Routed through writeOrQueue so a point earned while offline isn't lost --
+// it queues in the same outbox as the triggering task/habit/meal write and
+// replays on reconnect.
 export async function awardPoints(source: PointSource, sourceId: string | null, points: number, label?: string) {
-  const supabase = createClient();
-  await supabase.from("point_events").insert({ source, source_id: sourceId, points, label: label ?? null });
+  await writeOrQueue({
+    table: "point_events",
+    op: "insert",
+    payload: { source, source_id: sourceId, points, label: label ?? null },
+  });
 }
 
 // Reverses the most recent award for this source/sourceId (LIFO) -- used
@@ -51,8 +58,7 @@ export async function revokeLatestPoints(source: PointSource, sourceId: string) 
 // most one bonus row should ever exist for it, and for undoing a redemption,
 // where source_id is the reward id and there's exactly one spend event.
 export async function revokeExactPoints(source: PointSource, sourceId: string) {
-  const supabase = createClient();
-  await supabase.from("point_events").delete().eq("source", source).eq("source_id", sourceId);
+  await writeOrQueue({ table: "point_events", op: "delete", payload: {}, match: { source, source_id: sourceId } });
 }
 
 export async function getPointBalance(): Promise<number> {

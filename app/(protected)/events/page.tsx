@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PageHeader, Section, Card, Pill } from "@/components/ui";
 import CalendarMonth from "@/components/CalendarMonth";
+import { createClient } from "@/lib/supabase/client";
+import { cacheGet, cacheSet, writeOrQueue } from "@/lib/offline/sync";
 import type { EventColor, CalEvent } from "@/lib/mock-data";
 import type { CalendarApiEvent } from "@/app/api/calendar/route";
+
+type InboxItem = { id: string; raw_text: string; status: "unprocessed" | "processed" };
 
 const DOT_COLOR: Record<EventColor, string> = {
   accent: "bg-accent",
@@ -30,6 +34,7 @@ function startOfWeek(d: Date) {
 }
 
 export default function EventsPage() {
+  const supabase = createClient();
   // Computed fresh every render — this was previously a module-level constant
   // that only evaluated once at build/first-load, so "today" went stale.
   const today = new Date();
@@ -43,7 +48,12 @@ export default function EventsPage() {
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [calendarStatus, setCalendarStatus] = useState<"loading" | "connected" | "error">("loading");
 
+  const [capture, setCapture] = useState("");
+  const [inbox, setInbox] = useState<InboxItem[]>([]);
+
   useEffect(() => {
+    // Calendar events are cached for offline viewing; the fetch itself
+    // naturally fails offline, so the .catch below is also the offline path.
     fetch("/api/calendar")
       .then((res) => res.json())
       .then((data: { events: CalendarApiEvent[]; error?: string }) => {
@@ -51,19 +61,52 @@ export default function EventsPage() {
           setCalendarStatus("error");
           return;
         }
-        setEvents(data.events.map((e) => ({ ...e, color: "info" as const })));
+        const withColor = data.events.map((e) => ({ ...e, color: "info" as const }));
+        setEvents(withColor);
+        cacheSet("calendarEvents", withColor);
         setCalendarStatus("connected");
       })
-      .catch(() => setCalendarStatus("error"));
+      .catch(async () => {
+        const cached = await cacheGet<CalEvent[]>("calendarEvents");
+        if (cached) {
+          setEvents(cached);
+          setCalendarStatus("connected");
+        } else {
+          setCalendarStatus("error");
+        }
+      });
+
+    async function loadInbox() {
+      if (!navigator.onLine) {
+        const cached = await cacheGet<InboxItem[]>("inbox");
+        if (cached) setInbox(cached);
+        return;
+      }
+      const { data } = await supabase
+        .from("inbox")
+        .select("id, raw_text, status")
+        .eq("status", "unprocessed")
+        .order("captured_at", { ascending: false });
+      if (data) {
+        setInbox(data as InboxItem[]);
+        cacheSet("inbox", data);
+      }
+    }
+    loadInbox();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [capture, setCapture] = useState("");
-  const [inbox, setInbox] = useState<string[]>([]);
-
   const submitCapture = () => {
-    if (!capture.trim()) return;
-    setInbox((prev) => [capture.trim(), ...prev]);
+    const text = capture.trim();
+    if (!text) return;
+    const item: InboxItem = { id: crypto.randomUUID(), raw_text: text, status: "unprocessed" };
+    setInbox((prev) => {
+      const next = [item, ...prev];
+      cacheSet("inbox", next);
+      return next;
+    });
     setCapture("");
+    writeOrQueue({ table: "inbox", op: "insert", payload: { id: item.id, raw_text: text } });
   };
 
   const selectedLabel = new Date(selectedKey).toLocaleDateString("en-US", {
@@ -193,9 +236,9 @@ export default function EventsPage() {
           </div>
           {inbox.length > 0 && (
             <ul className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
-              {inbox.map((item, i) => (
-                <li key={i} className="flex items-center justify-between text-[13px]">
-                  <span className="text-ink-soft">{item}</span>
+              {inbox.map((item) => (
+                <li key={item.id} className="flex items-center justify-between text-[13px]">
+                  <span className="text-ink-soft">{item.raw_text}</span>
                   <Pill tone="neutral">unprocessed</Pill>
                 </li>
               ))}

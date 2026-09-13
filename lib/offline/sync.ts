@@ -14,6 +14,19 @@ export async function queueMutation(item: Omit<OutboxItem, "id" | "createdAt">) 
   await offlineDb.outbox.add({ ...item, createdAt: Date.now() });
 }
 
+async function runMutation(item: Omit<OutboxItem, "id" | "createdAt">) {
+  const supabase = createClient();
+  if (item.op === "insert") {
+    const { error } = await supabase.from(item.table).insert(item.payload);
+    if (error) throw error;
+  } else if (item.match) {
+    let q = item.op === "delete" ? supabase.from(item.table).delete() : supabase.from(item.table).update(item.payload);
+    for (const [k, v] of Object.entries(item.match)) q = q.eq(k, v as string);
+    const { error } = await q;
+    if (error) throw error;
+  }
+}
+
 // Runs a Supabase write; if it fails (offline, dropped connection), the
 // mutation is queued instead and replayed later by flushOutbox — the caller
 // has already updated local state/cache optimistically either way.
@@ -23,16 +36,7 @@ export async function writeOrQueue(item: Omit<OutboxItem, "id" | "createdAt">) {
     return;
   }
   try {
-    const supabase = createClient();
-    if (item.op === "insert") {
-      const { error } = await supabase.from(item.table).insert(item.payload);
-      if (error) throw error;
-    } else if (item.match) {
-      let q = supabase.from(item.table).update(item.payload);
-      for (const [k, v] of Object.entries(item.match)) q = q.eq(k, v as string);
-      const { error } = await q;
-      if (error) throw error;
-    }
+    await runMutation(item);
   } catch {
     await queueMutation(item);
   }
@@ -42,20 +46,11 @@ export async function writeOrQueue(item: Omit<OutboxItem, "id" | "createdAt">) {
 // so nothing syncs passively while the connection is unreliable or metered.
 export async function flushOutbox() {
   if (!navigator.onLine) return;
-  const supabase = createClient();
   const items = await offlineDb.outbox.orderBy("id").toArray();
 
   for (const item of items) {
     try {
-      if (item.op === "insert") {
-        const { error } = await supabase.from(item.table).insert(item.payload);
-        if (error) throw error;
-      } else if (item.match) {
-        let q = supabase.from(item.table).update(item.payload);
-        for (const [k, v] of Object.entries(item.match)) q = q.eq(k, v as string);
-        const { error } = await q;
-        if (error) throw error;
-      }
+      await runMutation(item);
       if (item.id != null) await offlineDb.outbox.delete(item.id);
     } catch (err) {
       console.error("Sync failed, will retry on next reconnect", item, err);
